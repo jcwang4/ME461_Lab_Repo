@@ -601,10 +601,10 @@ __interrupt void RXAINT_recv_ready(void)
     SciaRegs.SCIFFRX.bit.RXFFINTCLR = 1;
     PieCtrlRegs.PIEACK.all = PIEACK_GROUP9;
 
-    if (RXAdata == 'b'){ //RXAdata pulls from the keyboard, so by pressing b it will be set to b
+    if (RXAdata == 'b'){ //RXAdata pulls from the keyboard, so by pressing b it the if statement will become true
                GpioDataRegs.GPBSET.bit.GPIO34 = 1; // if RXAdata is equal to a then turn on the red board red LED
     }
-    if (RXAdata == 'a'){//RXAdata pulls from the keyboard, so by pressing a it will be set to a
+    if (RXAdata == 'a'){//RXAdata pulls from the keyboard, so by pressing a it the if statement will become true
                GpioDataRegs.GPBCLEAR.bit.GPIO34 = 1; // if RXAdata is equal to a then turn off the red board red LED
 
         }
