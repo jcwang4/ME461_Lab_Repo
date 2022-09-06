@@ -582,7 +582,7 @@ __interrupt void TXDINT_data_sent(void)
 #ifdef _FLASH
 #pragma CODE_SECTION(RXAINT_recv_ready, ".TI.ramfunc");
 #endif
-__interrupt void RXAINT_recv_ready(void)
+__interrupt void RXAINT_recv_ready(void) //void is for no data, and for allocating memory. In this case, every time the keyboard is pressed the board will recieve and create an interrupt
 {
     RXAdata = SciaRegs.SCIRXBUF.all;
 
@@ -595,7 +595,7 @@ __interrupt void RXAINT_recv_ready(void)
     } else {
         RXAdata = RXAdata & 0x00FF;
 
-        numRXA ++;
+        numRXA ++; //this then adds that every time the board recieves input from the keyboard
     }
 
     SciaRegs.SCIFFRX.bit.RXFFINTCLR = 1;
