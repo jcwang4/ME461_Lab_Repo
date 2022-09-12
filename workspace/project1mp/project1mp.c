@@ -47,26 +47,27 @@ float frequency = 0.05;
 float offset = 0.25;
 int32_t timeint = 0;
 float satvalue = 0;
+int32_t time2int = 0;
+int16_t time3int = 0;
+int16_t time4int = 0;
 
-//float saturate(input, saturation_limit);
-float saturate(input, saturation_limit)
+float saturate(float input, float saturation_limit) //must define the function data type as well as the data type of the arguments
 {
-   //float input = 0;
-   //float saturation_limit = 0;
 
     if(input>saturation_limit)
     {
-        return 1.0;
+        return saturation_limit;
     }
     else if(input<(-saturation_limit))
     {
-        return 2.0;
+        return -saturation_limit;
     }
     else
     {
-        return 3.0;
+        return input;
     }
 }
+
 void main(void)
 {
     // PLL, WatchDog, enable Peripheral Clocks
@@ -313,12 +314,17 @@ void main(void)
         if (UARTPrint == 1 )
         {
             timeint = timeint + 1;
+            time2int = time2int + 2;
+            time3int = time3int + 3;
+            time4int = time4int + 4;
             time = timeint*0.25;
             sinvalue = ampl*sin(2*PI*frequency*time) + offset;
 
             satvalue = saturate(sinvalue, 2.65);
 
-                serial_printf("timeint: %ld time: %.2f sinvalue: %.3f satvalue: %.2f\r\n", timeint, time, sinvalue, satvalue);
+                // serial_printf(&SerialA,"timeint: %ld time3int: %ld time3int: %ld time2int: %ld time: %.2f sinvalue: %.3f satvalue: %.2f\r\n", timeint, time3int, time2int, time4int, time, sinvalue, satvalue); this is the incorrect code
+                serial_printf(&SerialA,"timeint: %ld time3int: %d time3int: %ld time2int: %d time: %.2f sinvalue: %.3f satvalue: %.2f\r\n", timeint, time3int, time2int, time4int, time, sinvalue, satvalue);
+
             UARTPrint = 0; //this must be sent back to zero, because in the cpu_timer2_isr code the UARTPrint will be set to 1 when InterruptCount%50 = 0
         }                  //so if UARTPrint is not set back to 0, it will remain at 1 and the while loop will infinitely print instead of periodically
     }
