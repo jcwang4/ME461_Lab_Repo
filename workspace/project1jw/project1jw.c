@@ -40,7 +40,36 @@ extern uint32_t numRXA;
 uint16_t UARTPrint = 0;
 uint16_t LEDdisplaynum = 0;
 
+// Global float variables for sine function
+float sinvalue = 0;
+float time = 0;
+float ampl = 3.0;
+float frequency = 0.05;
+float offset = 0.25;
+float satvalue = 0;
 
+// 32 and 16 bit integers
+int32_t timeint  = 0;
+int32_t time2int = 0;
+int16_t time3int = 0;
+int16_t time4int = 0;
+
+// Defining function parameters
+float saturate(float input, float saturation_limit)
+{
+    if(input > saturation_limit) // Defining inputs that lie above the positive saturation limit
+        {
+        return saturation_limit;  // If the input values are greater than the positive saturation limit, return the saturation limit
+        }
+    else if (input < (-saturation_limit)) // Defining inputs that lie below the negative saturation limit
+        {
+        return -saturation_limit; //If the input values are lesser than the negative saturation limit, return the negative saturation limit
+        }
+    else // This will cover all remaining input values that fall between the upper and lower bounds
+        {
+        return input; // If the input values fall outside of the two defined parameters return the input value
+        }
+}
 void main(void)
 {
     // PLL, WatchDog, enable Peripheral Clocks
@@ -246,9 +275,9 @@ void main(void)
 
     // Configure CPU-Timer 0, 1, and 2 to interrupt every given period:
     // 200MHz CPU Freq,                       Period (in uSeconds)
-    ConfigCpuTimer(&CpuTimer0, LAUNCHPAD_CPU_FREQUENCY, 800000); //Blue LED on red board, higher number means longer blink period
-    ConfigCpuTimer(&CpuTimer1, LAUNCHPAD_CPU_FREQUENCY, 80000);  //Red LED on red board, higher number means longer blink period
-    ConfigCpuTimer(&CpuTimer2, LAUNCHPAD_CPU_FREQUENCY, 0000);
+    ConfigCpuTimer(&CpuTimer0, LAUNCHPAD_CPU_FREQUENCY, 10000); //Blue LED on red board, higher number means longer blink period
+    ConfigCpuTimer(&CpuTimer1, LAUNCHPAD_CPU_FREQUENCY, 20000); //Red LED on red board, higher number means longer blink period
+    ConfigCpuTimer(&CpuTimer2, LAUNCHPAD_CPU_FREQUENCY, 5000);  //5000 us is the equivalent to 5 ms
 
     // Enable CpuTimer Interrupt bit TIE
     CpuTimer0Regs.TCR.all = 0x4000;
@@ -285,8 +314,16 @@ void main(void)
     while(1)
     {
         if (UARTPrint == 1 ) {
-				serial_printf(&SerialA,"Num Timer2:%ld Num SerialRX: %ld\r\n",CpuTimer2.InterruptCount,numRXA);
-            UARTPrint = 0;
+			timeint = timeint + 1;
+			time2int = time2int + 2;
+			time3int = time3int + 3;
+			time4int = time4int + 4;
+			time = timeint*0.25;
+			sinvalue = ampl*sin(2*PI*frequency*time) + offset;
+			satvalue = saturate(sinvalue, 2.65);
+			    //serial_printf(&SerialA,"timeint: %d time3int: %ld time3int: %d time2int: %ld time: %.2f sinvalue: %.3f satvalue: %.2f\r\n", timeint, time3int, time2int, time4int, time, sinvalue, satvalue);
+			    serial_printf(&SerialA,"timeint: %ld time3int: %d time3int: %ld time2int: %d time: %.2f sinvalue: %.3f satvalue: %.2f\r\n", timeint, time3int, time2int, time4int, time, sinvalue, satvalue);
+            UARTPrint = 0; // It is important that this line exists, otherwise the loop would continuously run without resetting to 0
         }
     }
 }
@@ -358,5 +395,5 @@ __interrupt void cpu_timer2_isr(void)
 	
 	if ((CpuTimer2.InterruptCount % 50) == 0) {
 		UARTPrint = 1;
-	}
+	} // This function %50 prevents the interrupt function from only running once every 50 cases. This will now print the statement once every 250 ms or .25s
 }
