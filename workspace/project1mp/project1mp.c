@@ -40,6 +40,7 @@ extern uint32_t numRXA;
 uint16_t UARTPrint = 0;
 uint16_t LEDdisplaynum = 0;
 
+//the following are all varaibles defined for use in later functions
 float sinvalue = 0;
 float time = 0;
 float ampl = 3.0;
@@ -47,6 +48,8 @@ float frequency = 0.05;
 float offset = 0.25;
 int32_t timeint = 0;
 float satvalue = 0;
+
+//variables that are 16 and 32 bit integers
 int32_t time2int = 0;
 int16_t time3int = 0;
 int16_t time4int = 0;
@@ -54,15 +57,15 @@ int16_t time4int = 0;
 float saturate(float input, float saturation_limit) //must define the function data type as well as the data type of the arguments
 {
 
-    if(input>saturation_limit)
+    if(input>saturation_limit) //the saturation limit will be the maximum of the sine wave, so if input exceeds the limit it will return the saturation limit
     {
         return saturation_limit;
     }
-    else if(input<(-saturation_limit))
+    else if(input<(-saturation_limit)) //the same is true for the bottom of the sine wave
     {
         return -saturation_limit;
     }
-    else
+    else //then the else statement is for everything that is in between the negative and postive saturation limit
     {
         return input;
     }
@@ -275,7 +278,7 @@ void main(void)
     // 200MHz CPU Freq,                       Period (in uSeconds)
     ConfigCpuTimer(&CpuTimer0, LAUNCHPAD_CPU_FREQUENCY, 10000);
     ConfigCpuTimer(&CpuTimer1, LAUNCHPAD_CPU_FREQUENCY, 20000);
-    ConfigCpuTimer(&CpuTimer2, LAUNCHPAD_CPU_FREQUENCY, 5000);
+    ConfigCpuTimer(&CpuTimer2, LAUNCHPAD_CPU_FREQUENCY, 5000); //by setting the timer to 5000 uSeconds, the interrupt will be called every 5 mSeconds
 
     // Enable CpuTimer Interrupt bit TIE
     CpuTimer0Regs.TCR.all = 0x4000;
@@ -324,6 +327,8 @@ void main(void)
 
                 // serial_printf(&SerialA,"timeint: %ld time3int: %ld time3int: %ld time2int: %ld time: %.2f sinvalue: %.3f satvalue: %.2f\r\n", timeint, time3int, time2int, time4int, time, sinvalue, satvalue); this is the incorrect code
                 serial_printf(&SerialA,"timeint: %ld time3int: %d time3int: %ld time2int: %d time: %.2f sinvalue: %.3f satvalue: %.2f\r\n", timeint, time3int, time2int, time4int, time, sinvalue, satvalue);
+                //the first serial_printf statement assigns the wrong float types so it will produce incorrect data
+                //the seconds serial_printf statement uses the correct float types and therefore returns the correct numbers
 
             UARTPrint = 0; //this must be sent back to zero, because in the cpu_timer2_isr code the UARTPrint will be set to 1 when InterruptCount%50 = 0
         }                  //so if UARTPrint is not set back to 0, it will remain at 1 and the while loop will infinitely print instead of periodically
@@ -395,7 +400,8 @@ __interrupt void cpu_timer2_isr(void)
 
     CpuTimer2.InterruptCount++;
 
-    if ((CpuTimer2.InterruptCount % 50) == 0) {
+    if ((CpuTimer2.InterruptCount % 50) == 0) //with the interrupt incrementing by 1 every 5 ms, for serial_printf to be called the function will have to increment 50 times, every 5 ms = 250 ms
+    {
         UARTPrint = 1;
     }
 }

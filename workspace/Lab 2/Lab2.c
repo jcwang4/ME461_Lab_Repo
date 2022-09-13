@@ -253,11 +253,11 @@ void main(void)
     // 200MHz CPU Freq,                       Period (in uSeconds)
     ConfigCpuTimer(&CpuTimer0, LAUNCHPAD_CPU_FREQUENCY, 10000);
     ConfigCpuTimer(&CpuTimer1, LAUNCHPAD_CPU_FREQUENCY, 20000);
-    ConfigCpuTimer(&CpuTimer2, LAUNCHPAD_CPU_FREQUENCY, 250000); // this sets the blinking rate
+    ConfigCpuTimer(&CpuTimer2, LAUNCHPAD_CPU_FREQUENCY, 250000); // this sets the blinking rate to 0.25 seconds
 
     // Enable CpuTimer Interrupt bit TIE
     //CpuTimer0Regs.TCR.all = 0x4000;
-    //CpuTimer1Regs.TCR.all = 0x4000; these two timers are commented out so that the third timer is focused
+    //CpuTimer1Regs.TCR.all = 0x4000; these two timers are commented out that only timer 2 is enabled
     CpuTimer2Regs.TCR.all = 0x4000;
 
     init_serialSCIA(&SerialA,115200);
@@ -375,7 +375,7 @@ __interrupt void cpu_timer2_isr(void)
 
 void SetLEDRowsOnOff(int16_t rows)
 {
-    //in all of the if and else statements, I reveresed the clear and set statements on accident. To avoid extra work, I switched it from == to !=, reversing the if statement
+    //in all of the if and else statements, I reversed the clear and set statements on accident. To avoid extra work, I switched it from == to !=, reversing the if statement
     if((rows & 0x10) != 0x10) // 10000
     {
         // ROW 1 Off Use SET.bit for On and TOGGLE.bit fto toggle On/Off

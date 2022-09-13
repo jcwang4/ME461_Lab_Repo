@@ -45,8 +45,8 @@ uint16_t UARTPrint = 0;
 uint16_t LEDdisplaynum = 0;
 uint32_t LEDCall = 0;
 
-void SetLEDRowsOnOff(int16_t rows); //calls function for use later
-int16_t ReadSwitches(void);
+void SetLEDRowsOnOff(int16_t rows); //calls function for later use
+int16_t ReadSwitches(void); //calls function for later use
 
 void main(void)
 {
@@ -255,7 +255,7 @@ void main(void)
     // 200MHz CPU Freq,                       Period (in uSeconds)
     ConfigCpuTimer(&CpuTimer0, LAUNCHPAD_CPU_FREQUENCY, 10000);
     ConfigCpuTimer(&CpuTimer1, LAUNCHPAD_CPU_FREQUENCY, 20000);
-    ConfigCpuTimer(&CpuTimer2, LAUNCHPAD_CPU_FREQUENCY, 1000);
+    ConfigCpuTimer(&CpuTimer2, LAUNCHPAD_CPU_FREQUENCY, 1000); //timing of 1 ms
 
     // Enable CpuTimer Interrupt bit TIE
     //CpuTimer0Regs.TCR.all = 0x4000;
@@ -365,11 +365,13 @@ __interrupt void cpu_timer2_isr(void)
 	
 	if ((CpuTimer2.InterruptCount % 100) == 0)
 	{
-		UARTPrint = 1;
+		UARTPrint = 1; //this code is within the %100 statement so that the serial_printf function will only run every 0.1 seconds
+		               //the ReadSwitches is also called as this does not need to update faster than we can move the buttons
 
-		   if((ReadSwitches() & 0x6) != 0x6) //
-		    {
-		        LEDCall++;
+		   if((ReadSwitches() & 0x6) != 0x6) //this means that if both buttons are not pressed, the if statement is true and LEDCall will increment
+		    {                               //if buttons are both pressed, the statement will read false and the function will not run
+		                                   //0x6 refers to 0110, which is why it is buttons 2 and 3
+		        LEDCall++; //increments LEDCall
 		    }
 
 		    SetLEDRowsOnOff(LEDCall); //then this takes the variable LEDCall and passes it to the SetLEDRowsOnOff function, so every time LEDCall increments, the binary will change and different rows will light up
