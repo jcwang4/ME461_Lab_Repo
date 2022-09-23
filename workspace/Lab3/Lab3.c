@@ -33,8 +33,10 @@ __interrupt void cpu_timer1_isr(void);
 __interrupt void cpu_timer2_isr(void);
 __interrupt void SWI_isr(void);
 
-void setEPWM2A(float);
+void setEPWM2A(float); //define functions for later use so that the main function can reference them
 void setEPWM2B(float);
+void setEPWM8A_RCServo(float angle);
+void setEPWM8B_RCServo(float angle);
 
 // Count variables
 uint32_t numTimer0calls = 0;
@@ -43,10 +45,14 @@ extern uint32_t numRXA;
 uint16_t UARTPrint = 0;
 uint16_t LEDdisplaynum = 0;
 
-int16_t updown = 1;
+int16_t updown = 1; //global variables we defined for the robot motors, servo motors, and the song length
 float saturation_limit = 10.0;
+float angle_max = 90.0;
 float myeffort = 0.0;
+float servoeffort = 0.0;
 int16_t updown_motor = 1;
+int16_t updown_servo = 1;
+uint16_t length = 0;
 
 void main(void)
 {
@@ -254,8 +260,8 @@ void main(void)
     // Configure CPU-Timer 0, 1, and 2 to interrupt every given period:
     // 200MHz CPU Freq,                       Period (in uSeconds)
     ConfigCpuTimer(&CpuTimer0, LAUNCHPAD_CPU_FREQUENCY, 10000);
-    ConfigCpuTimer(&CpuTimer1, LAUNCHPAD_CPU_FREQUENCY, 20000);
-    ConfigCpuTimer(&CpuTimer2, LAUNCHPAD_CPU_FREQUENCY, 1000);
+    ConfigCpuTimer(&CpuTimer1, LAUNCHPAD_CPU_FREQUENCY, 375000); //we chose the Star Spangled Banner for our song so we had to slow down the song speed
+    ConfigCpuTimer(&CpuTimer2, LAUNCHPAD_CPU_FREQUENCY, 1000); //this was lowered so that the LED would dim and brighten quickly by using CMPA
 
     // Enable CpuTimer Interrupt bit TIE
     CpuTimer0Regs.TCR.all = 0x4000;
@@ -267,10 +273,10 @@ void main(void)
     //    init_serialSCIC(&SerialC,115200);
     //    init_serialSCID(&SerialD,115200);
 
-    EPwm12Regs.TBCTL.bit.CTRMODE = 0;
-    EPwm12Regs.TBCTL.bit.FREE_SOFT = 2;
-    EPwm12Regs.TBCTL.bit.PHSEN = 0;
-    EPwm12Regs.TBCTL.bit.CLKDIV = 0;
+    EPwm12Regs.TBCTL.bit.CTRMODE = 0; //this sets the counter to count upwards
+    EPwm12Regs.TBCTL.bit.FREE_SOFT = 2; //this sets the counter to free run, so it won't stop
+    EPwm12Regs.TBCTL.bit.PHSEN = 0; // does not load the time base counter from the time base phase register
+    EPwm12Regs.TBCTL.bit.CLKDIV = 0; //clkdiv set to 0 will not change the Hz that this runs at
 
     EPwm12Regs.TBCTR = 0;
 
@@ -305,14 +311,14 @@ void main(void)
     EPwm8Regs.TBCTL.bit.CTRMODE = 0;
     EPwm8Regs.TBCTL.bit.FREE_SOFT = 2;
     EPwm8Regs.TBCTL.bit.PHSEN = 0;
-    EPwm8Regs.TBCTL.bit.CLKDIV = 0;
+    EPwm8Regs.TBCTL.bit.CLKDIV = 4;
 
     EPwm8Regs.TBCTR = 0;
 
-    EPwm8Regs.TBPRD = 2500;
+    EPwm8Regs.TBPRD = 62500;
 
-    EPwm8Regs.CMPA.bit.CMPA = 0;
-    EPwm8Regs.CMPB.bit.CMPB = 0;
+    EPwm8Regs.CMPA.bit.CMPA = 5000;
+    EPwm8Regs.CMPB.bit.CMPB = 5000;
 
     EPwm8Regs.AQCTLA.bit.CAU = 1;
     EPwm8Regs.AQCTLA.bit.ZRO = 2;
@@ -325,16 +331,16 @@ void main(void)
     EPwm9Regs.TBCTL.bit.CTRMODE = 0;
     EPwm9Regs.TBCTL.bit.FREE_SOFT = 2;
     EPwm9Regs.TBCTL.bit.PHSEN = 0;
-    EPwm9Regs.TBCTL.bit.CLKDIV = 0;
+    EPwm9Regs.TBCTL.bit.CLKDIV = 1;
 
     EPwm9Regs.TBCTR = 0;
 
-    EPwm9Regs.TBPRD = 2500;
+    EPwm9Regs.TBPRD = 0;
 
-    EPwm9Regs.CMPA.bit.CMPA = 0;
+   // EPwm9Regs.CMPA.bit.CMPA = 0;
 
-    EPwm9Regs.AQCTLA.bit.CAU = 1;
-    EPwm9Regs.AQCTLA.bit.ZRO = 2;
+    EPwm9Regs.AQCTLA.bit.CAU = 0;
+    EPwm9Regs.AQCTLA.bit.ZRO = 3;
 
     EPwm9Regs.TBPHS.bit.TBPHS = 0;
 //-------------------------------------
@@ -433,7 +439,15 @@ __interrupt void cpu_timer0_isr(void)
 // cpu_timer1_isr - CPU Timer1 ISR
 __interrupt void cpu_timer1_isr(void)
 {
-
+    if (length < SONG_LENGTH)
+    {
+        EPwm9Regs.TBPRD = songarray[length++];
+    }
+    else
+    {
+        GPIO_SetupPinMux(16, GPIO_MUX_CPU1, 0); //buzzer
+        GpioDataRegs.GPACLEAR.bit.GPIO16 = 1;
+    }
 
     CpuTimer1.InterruptCount++;
 }
@@ -447,7 +461,7 @@ __interrupt void cpu_timer2_isr(void)
     GpioDataRegs.GPATOGGLE.bit.GPIO31 = 1;
 
     CpuTimer2.InterruptCount++;
-/*
+//Excercise 3 --------------------------------------------------------------------------
     if(updown == 1) //the two if statements interact so that when CMPA reaches TBPRD, up down will switch to 0 so that CMPA will count down to 0, where then updown will be set back to 1
     {
         EPwm12Regs.CMPA.bit.CMPA = EPwm12Regs.CMPA.bit.CMPA + 1;
@@ -470,7 +484,7 @@ __interrupt void cpu_timer2_isr(void)
     {
         UARTPrint = 1;
     }
- */
+
     if (myeffort >= 10 )
     {
         updown_motor = 0;
@@ -495,6 +509,32 @@ __interrupt void cpu_timer2_isr(void)
     {
         UARTPrint = 1;
     }
+
+ //Exercise 4 ---------------------------------------------------------------------
+    if (servoeffort >= 90 )
+       {
+           updown_servo = 0;
+       }
+       else if (servoeffort <= -90) {
+           updown_servo = 1;
+       }
+
+       if (updown_servo == 1)
+       {
+           servoeffort += 0.1;
+       }
+       else
+       {
+           servoeffort -= 0.1;
+       }
+
+       setEPWM8A_RCServo(servoeffort);
+       setEPWM8B_RCServo(servoeffort);
+
+       if ((CpuTimer2.InterruptCount % 50) == 0)
+       {
+           UARTPrint = 1;
+       }
 }
 
 void setEPWM2A(float controleffort)
@@ -523,4 +563,31 @@ void setEPWM2B(float controleffort)
         controleffort = -10.0;
     }
     EPwm2Regs.CMPB.bit.CMPB = (125.0*controleffort)+1250.0;
+}
+void setEPWM8A_RCServo(float angle)
+{
+
+    if(angle >= angle_max) //the saturation limit will be the maximum of the sine wave, so if input exceeds the limit it will return the saturation limit
+    {
+        angle = 90.0;
+    }
+    else if(angle <= (-angle_max)) //the same is true for the bottom of the sine wave
+    {
+        angle = -90.0;
+    }
+    EPwm8Regs.CMPA.bit.CMPA = (27.778*angle)+5000;
+}
+
+void setEPWM8B_RCServo(float angle)
+{
+
+    if(angle >= angle_max) //the saturation limit will be the maximum of the sine wave, so if input exceeds the limit it will return the saturation limit
+    {
+        angle = 90.0;
+    }
+    else if(angle <= (-angle_max)) //the same is true for the bottom of the sine wave
+    {
+        angle = -90.0;
+    }
+    EPwm8Regs.CMPB.bit.CMPB = (27.778*angle)+5000;
 }
