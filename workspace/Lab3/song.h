@@ -21,7 +21,7 @@
 
 
 #define OFFNOTE 1
-
+//the Star Spangled Banner notes
 #define SONG_LENGTH 516
 uint16_t songarray[SONG_LENGTH] = {
 G4NOTE,

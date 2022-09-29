@@ -33,7 +33,8 @@ __interrupt void cpu_timer1_isr(void);
 __interrupt void cpu_timer2_isr(void);
 __interrupt void SWI_isr(void);
 
-void setEPWM2A(float); //define functions for later use so that the main function can reference them
+//define functions for later use so that the main function can reference them
+void setEPWM2A(float);
 void setEPWM2B(float);
 void setEPWM8A_RCServo(float angle);
 void setEPWM8B_RCServo(float angle);
@@ -45,9 +46,10 @@ extern uint32_t numRXA;
 uint16_t UARTPrint = 0;
 uint16_t LEDdisplaynum = 0;
 
-int16_t updown = 1; //global variables we defined for the robot motors, servo motors, and the song length
-float saturation_limit = 10.0;
-float angle_max = 90.0;
+//global variables we defined for the robot motors, servo motors, and the song length
+int16_t updown = 1;
+float saturation_limit = 10.0; //motor will only go from -10 to 10
+float angle_max = 90.0; //servo can only go from -90 to 90 degrees
 float myeffort = 0.0;
 float servoeffort = 0.0;
 int16_t updown_motor = 1;
@@ -268,89 +270,107 @@ void main(void)
     CpuTimer1Regs.TCR.all = 0x4000;
     CpuTimer2Regs.TCR.all = 0x4000;
 
-    init_serialSCIA(&SerialA,115200);
+    init_serialSCIA(&SerialA,115200); //uncommented out for exercise 2
     //    init_serialSCIB(&SerialB,115200);
     //    init_serialSCIC(&SerialC,115200);
     //    init_serialSCID(&SerialD,115200);
 
+//-----------------------------------------------------------------------
+//EPwm12 controls the LED's
     EPwm12Regs.TBCTL.bit.CTRMODE = 0; //this sets the counter to count upwards
     EPwm12Regs.TBCTL.bit.FREE_SOFT = 2; //this sets the counter to free run, so it won't stop
     EPwm12Regs.TBCTL.bit.PHSEN = 0; // does not load the time base counter from the time base phase register
-    EPwm12Regs.TBCTL.bit.CLKDIV = 0; //clkdiv set to 0 will not change the Hz that this runs at
+    EPwm12Regs.TBCTL.bit.CLKDIV = 0; //clkdiv set to 0 will not scale the bits, if this is changed it will change the carrier frequency
+                                     //clkdiv by 5 will make it so that the frequency will be too low and the LED will hurt our eyes
 
-    EPwm12Regs.TBCTR = 0;
+    EPwm12Regs.TBCTR = 0; //starts timer at zero
 
-    EPwm12Regs.TBPRD = 2500;
+    EPwm12Regs.TBPRD = 2500; //we want the period to be 20 KHz (50 microseconds), where the counting frequency is 50 MHz
+                            //so by using 1/50 MHz * TBRRD = 0.00005, it is possible to set the correct TBPRD
 
-    EPwm12Regs.CMPA.bit.CMPA = 0;
+    EPwm12Regs.CMPA.bit.CMPA = 0; //the duty cycle will start at 0, and can be manually controlled to set the brightness of the LED
+                                  //the duty cycle of the PWM controls the brightness of the light
 
-    EPwm12Regs.AQCTLA.bit.CAU = 1;
-    EPwm12Regs.AQCTLA.bit.ZRO = 2;
+    EPwm12Regs.AQCTLA.bit.CAU = 1; //this will clear when TBCTR = CMPA
+    EPwm12Regs.AQCTLA.bit.ZRO = 2; //this will set the pin when TBCTR is zero
 
-    EPwm12Regs.TBPHS.bit.TBPHS = 0;
+    EPwm12Regs.TBPHS.bit.TBPHS = 0;//sets the phase to zero
+
 //----------------------------------------
-    EPwm2Regs.TBCTL.bit.CTRMODE = 0;
-    EPwm2Regs.TBCTL.bit.FREE_SOFT = 2;
-    EPwm2Regs.TBCTL.bit.PHSEN = 0;
-    EPwm2Regs.TBCTL.bit.CLKDIV = 0;
+//EPwm2 will control the motors through an H bridge
+    EPwm2Regs.TBCTL.bit.CTRMODE = 0; //this sets the counter to count upwards
+    EPwm2Regs.TBCTL.bit.FREE_SOFT = 2; //this sets the counter to free run, so it won't stop
+    EPwm2Regs.TBCTL.bit.PHSEN = 0; //does not load the time base counter from the time base phase register
+    EPwm2Regs.TBCTL.bit.CLKDIV = 0; //clkdiv set to 0 will not scale the bits, if this is changed it will change the carrier frequency
 
-    EPwm2Regs.TBCTR = 0;
+    EPwm2Regs.TBCTR = 0; //starts timer at zero
 
-    EPwm2Regs.TBPRD = 2500;
+    EPwm2Regs.TBPRD = 2500;//2500; we want the period to be 20 KHz (50 microseconds), where the counting frequency is 50 MHz
+                           //so by using 1/50 MHz * TBRRD = 0.00005, it is possible to set the correct TBPRD
 
-    EPwm2Regs.CMPA.bit.CMPA = 0;
-    EPwm2Regs.CMPB.bit.CMPB = 0;
+    EPwm2Regs.CMPA.bit.CMPA = 0; //the duty cycle will start at 0, and can be manually controlled the motor
+    EPwm2Regs.CMPB.bit.CMPB = 0; //because there are two motors you have to define two CMP
+                                 //by starting the duty cycle at 0, the motors will start at stationary
 
-    EPwm2Regs.AQCTLA.bit.CAU = 1;
-    EPwm2Regs.AQCTLA.bit.ZRO = 2;
-    EPwm2Regs.AQCTLB.bit.CBU = 1;
-    EPwm2Regs.AQCTLB.bit.ZRO = 2;
+    EPwm2Regs.AQCTLA.bit.CAU = 1; //this will clear when TBCTR = CMPA
+    EPwm2Regs.AQCTLA.bit.ZRO = 2; //this will set the pin when TBCTR is zero
+    EPwm2Regs.AQCTLB.bit.CBU = 1; //this will clear when TBCTR = CMPB
+    EPwm2Regs.AQCTLB.bit.ZRO = 2; //this will set the pin when TBCTR is zero
 
-    EPwm2Regs.TBPHS.bit.TBPHS = 0;
+    EPwm2Regs.TBPHS.bit.TBPHS = 0; //this will set the pin when TBCTR is zero
+
 //--------------------------------------
-    EPwm8Regs.TBCTL.bit.CTRMODE = 0;
-    EPwm8Regs.TBCTL.bit.FREE_SOFT = 2;
-    EPwm8Regs.TBCTL.bit.PHSEN = 0;
-    EPwm8Regs.TBCTL.bit.CLKDIV = 4;
+//EPwm8 will control the servo
+    EPwm8Regs.TBCTL.bit.CTRMODE = 0; //this sets the counter to count upwards
+    EPwm8Regs.TBCTL.bit.FREE_SOFT = 2; //this sets the counter to free run, so it won't stop
+    EPwm8Regs.TBCTL.bit.PHSEN = 0; //does not load the time base counter from the time base phase register
+    EPwm8Regs.TBCTL.bit.CLKDIV = 4; //the carrier frequency is changed to 50 Hz, but this number would be too high (above 16 bit)
+                                    //therefore the bit scaling needs to be changed so that the 50 Hz is within TBPRD range
 
-    EPwm8Regs.TBCTR = 0;
+    EPwm8Regs.TBCTR = 0; //starts timer at zero
 
-    EPwm8Regs.TBPRD = 62500;
+    EPwm8Regs.TBPRD = 62500; //By using the CLKDIV, it is now possible to use 50 Hz frequency because the EPWM8 is counting at
+                             //50 MHz divided by 16
 
-    EPwm8Regs.CMPA.bit.CMPA = 5000;
-    EPwm8Regs.CMPB.bit.CMPB = 5000;
+    EPwm8Regs.CMPA.bit.CMPA = 5000; //this starts the duty cycle at 8%, which is equivalent to 0 degrees on servo
+    EPwm8Regs.CMPB.bit.CMPB = 5000; //this starts the duty cycle at 8%, which is equivalent to 0 degrees on servo
+                                    //62500 * 0.08 = 5000
 
-    EPwm8Regs.AQCTLA.bit.CAU = 1;
-    EPwm8Regs.AQCTLA.bit.ZRO = 2;
-    EPwm8Regs.AQCTLB.bit.CBU = 1;
-    EPwm8Regs.AQCTLB.bit.ZRO = 2;
+    EPwm8Regs.AQCTLA.bit.CAU = 1; //this will clear when TBCTR = CMPA
+    EPwm8Regs.AQCTLA.bit.ZRO = 2; //this will set the pin when TBCTR is zero
+    EPwm8Regs.AQCTLB.bit.CBU = 1; //this will clear when TBCTR = CMPB
+    EPwm8Regs.AQCTLB.bit.ZRO = 2; //this will set the pin when TBCTR is zero
 
 
-    EPwm8Regs.TBPHS.bit.TBPHS = 0;
+    EPwm8Regs.TBPHS.bit.TBPHS = 0; //this will set the pin when TBCTR is zero
+
 //----------------------------------------
-    EPwm9Regs.TBCTL.bit.CTRMODE = 0;
-    EPwm9Regs.TBCTL.bit.FREE_SOFT = 2;
-    EPwm9Regs.TBCTL.bit.PHSEN = 0;
+//EPwm9 will control the buzzer
+    EPwm9Regs.TBCTL.bit.CTRMODE = 0; //this sets the counter to count upwards
+    EPwm9Regs.TBCTL.bit.FREE_SOFT = 2; //this sets the counter to free run, so it won't stop
+    EPwm9Regs.TBCTL.bit.PHSEN = 0; //does not load the time base counter from the time base phase register
     EPwm9Regs.TBCTL.bit.CLKDIV = 1;
 
-    EPwm9Regs.TBCTR = 0;
+    EPwm9Regs.TBCTR = 0; //starts timer at zero
 
     EPwm9Regs.TBPRD = 0;
 
-   // EPwm9Regs.CMPA.bit.CMPA = 0;
+   // EPwm9Regs.CMPA.bit.CMPA = 0; this gets rid of the intilization
 
-    EPwm9Regs.AQCTLA.bit.CAU = 0;
-    EPwm9Regs.AQCTLA.bit.ZRO = 3;
+    EPwm9Regs.AQCTLA.bit.CAU = 0; //does nothing when TBCTR = CMPA
+    EPwm9Regs.AQCTLA.bit.ZRO = 3; //this will toggle the output, low will go high and vice versa
 
-    EPwm9Regs.TBPHS.bit.TBPHS = 0;
+    EPwm9Regs.TBPHS.bit.TBPHS = 0; //this will set the pin when TBCTR is zero
 //-------------------------------------
-    GPIO_SetupPinMux(22, GPIO_MUX_CPU1, 5); //Blue light
-    GPIO_SetupPinMux(2, GPIO_MUX_CPU1, 1); //PWM1
-    GPIO_SetupPinMux(3, GPIO_MUX_CPU1, 1); //PWM2
+//The PinMux changes the pins, such that the original output pin will become an EPwm pin
+    GPIO_SetupPinMux(22, GPIO_MUX_CPU1, 5); //LED 1
+    GPIO_SetupPinMux(2, GPIO_MUX_CPU1, 1); //right motor
+    GPIO_SetupPinMux(3, GPIO_MUX_CPU1, 1); //left motor
     GPIO_SetupPinMux(14, GPIO_MUX_CPU1, 1); //servo 1
     GPIO_SetupPinMux(15, GPIO_MUX_CPU1, 1); //servo 2
     GPIO_SetupPinMux(16, GPIO_MUX_CPU1, 5); //buzzer
 
+//This disables the pull up resistor
     EALLOW; // Below are protected registers
     GpioCtrlRegs.GPAPUD.bit.GPIO2 = 1; // For EPWM2A
     GpioCtrlRegs.GPAPUD.bit.GPIO3 = 1; // For EPWM2B
@@ -389,7 +409,6 @@ void main(void)
     }
 }
 
-
 // SWI_isr,  Using this interrupt as a Software started interrupt
 __interrupt void SWI_isr(void) {
 
@@ -399,15 +418,11 @@ __interrupt void SWI_isr(void) {
     asm("       NOP");                    // Wait one cycle
     EINT;                                 // Clear INTM to enable interrupts
 
-
-
     // Insert SWI ISR Code here.......
-
 
     numSWIcalls++;
 
     DINT;
-
 }
 
 // cpu_timer0_isr - CPU Timer0 ISR
@@ -422,7 +437,7 @@ __interrupt void cpu_timer0_isr(void)
     //    }
 
     if ((numTimer0calls%250) == 0) {
-        //displayLEDletter(LEDdisplaynum);
+        //displayLEDletter(LEDdisplaynum); this is commented out so the dimming can actually be seen
         LEDdisplaynum++;
         if (LEDdisplaynum == 0xFFFF) {  // prevent roll over exception
             LEDdisplaynum = 0;
@@ -441,12 +456,12 @@ __interrupt void cpu_timer1_isr(void)
 {
     if (length < SONG_LENGTH)
     {
-        EPwm9Regs.TBPRD = songarray[length++];
+        EPwm9Regs.TBPRD = songarray[length++]; //this will increment the song upwards so that every time the TBPRD is reached the notes will proceed
     }
     else
     {
-        GPIO_SetupPinMux(16, GPIO_MUX_CPU1, 0); //buzzer
-        GpioDataRegs.GPACLEAR.bit.GPIO16 = 1;
+        GPIO_SetupPinMux(16, GPIO_MUX_CPU1, 0); //set PinMux to buzzer
+        GpioDataRegs.GPACLEAR.bit.GPIO16 = 1; //then this will clear the bit so that nothing is else is played when the end of the song is reached
     }
 
     CpuTimer1.InterruptCount++;
@@ -455,80 +470,79 @@ __interrupt void cpu_timer1_isr(void)
 // cpu_timer2_isr CPU Timer2 ISR
 __interrupt void cpu_timer2_isr(void)
 {
-
-
     // Blink LaunchPad Blue LED
     GpioDataRegs.GPATOGGLE.bit.GPIO31 = 1;
-
     CpuTimer2.InterruptCount++;
-//Excercise 3 --------------------------------------------------------------------------
-    if(updown == 1) //the two if statements interact so that when CMPA reaches TBPRD, up down will switch to 0 so that CMPA will count down to 0, where then updown will be set back to 1
+
+    //Code we have used in last couple of labs, this will create a print every time the counter reachs 50
+    if ((CpuTimer2.InterruptCount % 50) == 0)
     {
-        EPwm12Regs.CMPA.bit.CMPA = EPwm12Regs.CMPA.bit.CMPA + 1;
-        if(EPwm12Regs.CMPA.bit.CMPA == EPwm12Regs.TBPRD)
+        UARTPrint = 1;
+    }
+
+//Excercise 1 --------------------------------------------------
+    if(updown == 1) //the global variable is initialized at 1 so the function will start here
+    {
+        EPwm12Regs.CMPA.bit.CMPA = EPwm12Regs.CMPA.bit.CMPA + 1; //this counts CMPA upwards, increasing brightness
+        if(EPwm12Regs.CMPA.bit.CMPA == EPwm12Regs.TBPRD) //then when CMPA is equal to TBPRD, it will then trigger updown = 0
         {
-            updown = 0;
+            updown = 0; //this will create the other if statement to become true
         }
     }
 
     if(updown == 0)
     {
-        EPwm12Regs.CMPA.bit.CMPA = EPwm12Regs.CMPA.bit.CMPA - 1;
+        EPwm12Regs.CMPA.bit.CMPA = EPwm12Regs.CMPA.bit.CMPA - 1; //this counts CMPA downwards, decreasing brightness
         if(EPwm12Regs.CMPA.bit.CMPA == 0)
         {
-            updown = 1;
+            updown = 1; //this will now bring it back to the first if statement and repeat the cycle
         }
     }
 
-    if ((CpuTimer2.InterruptCount % 50) == 0)
-    {
-        UARTPrint = 1;
-    }
-
-    if (myeffort >= 10 )
+// Exercise 2 ------------------------------------------------------------------
+    if (myeffort >= 10 ) //if myeffort is greater than 10, then updown will be set to 0
     {
         updown_motor = 0;
     }
-    else if (myeffort <= -10) {
+
+    else if (myeffort <= -10) //when myeffort is less than -10, it will be set to 1
+    {
         updown_motor = 1;
     }
 
-    if (updown_motor == 1)
+    if (updown_motor == 1) //this calls the updown = 1 case, which will increase the motor speed
     {
         myeffort += 0.001;
     }
-    else
+
+    else //this calls the updown = 0 case, which will decrease the motor speed
     {
         myeffort -= 0.001;
     }
 
-    setEPWM2A(myeffort);
+    setEPWM2A(myeffort); //these two functions then set the EPWM signal to be equal to the myeffort function, which will then use the scaling function below
     setEPWM2B(myeffort);
 
-    if ((CpuTimer2.InterruptCount % 50) == 0)
-    {
-        UARTPrint = 1;
-    }
-
- //Exercise 4 ---------------------------------------------------------------------
-    if (servoeffort >= 90 )
+ //Exercise 3 ---------------------------------------------------------------------
+    if (servoeffort >= 90 ) //if servoeffort is greater than 90, then updown_servo will be set to 0
        {
            updown_servo = 0;
        }
-       else if (servoeffort <= -90) {
+       else if (servoeffort <= -90) //when servoeffort is less than -10, it will be set to 1
+       {
            updown_servo = 1;
        }
 
        if (updown_servo == 1)
        {
-           servoeffort += 0.1;
+           servoeffort += 0.1; //increments servo upwards
        }
        else
        {
-           servoeffort -= 0.1;
+           servoeffort -= 0.1; //increments servo downwards
        }
 
-       setEPWM8A_RCServo(servoeffort);
+       setEPWM8A_RCServo(servoeffort); //these two functions then set the EPWM signal to be equal to the servoeffort function, which will then use the scaling function below
        setEPWM8B_RCServo(servoeffort);
 
        if ((CpuTimer2.InterruptCount % 50) == 0)
@@ -536,58 +550,64 @@ __interrupt void cpu_timer2_isr(void)
            UARTPrint = 1;
        }
 }
-
+//Exercise 2 Void Functions ---------------------------------------------------------
 void setEPWM2A(float controleffort)
 {
 
-    if(controleffort >= saturation_limit) //the saturation limit will be the maximum of the sine wave, so if input exceeds the limit it will return the saturation limit
+    if(controleffort >= saturation_limit) //the saturation limit will be the maximum, so if input exceeds the limit it will return the saturation limit
     {
         controleffort = 10.0;
     }
-    else if(controleffort <= (-saturation_limit)) //the same is true for the bottom of the sine wave
+    else if(controleffort <= (-saturation_limit)) //the same is true for the bottom of the saturation limit
     {
         controleffort = -10.0;
     }
-    EPwm2Regs.CMPA.bit.CMPA = (125.0*controleffort)+1250.0;
+    EPwm2Regs.CMPA.bit.CMPA = (125.0*controleffort)+1250.0; //this scales the duty cycle so that -10 to 10 corresponds to 0 from 2500
+                                                            //2500 is defined by TBPRD
 }
 
 void setEPWM2B(float controleffort)
 {
 
-    if(controleffort>saturation_limit) //the saturation limit will be the maximum of the sine wave, so if input exceeds the limit it will return the saturation limit
+    if(controleffort>saturation_limit) //the saturation limit will be the maximum, so if input exceeds the limit it will return the saturation limit
     {
         controleffort = 10.0;
     }
-    else if(controleffort<(-saturation_limit)) //the same is true for the bottom of the sine wave
+    else if(controleffort<(-saturation_limit)) //the same is true for the bottom of the saturation limit
     {
         controleffort = -10.0;
     }
-    EPwm2Regs.CMPB.bit.CMPB = (125.0*controleffort)+1250.0;
+    EPwm2Regs.CMPB.bit.CMPB = (125.0*controleffort)+1250.0; //this scales the duty cycle so that -10 to 10 corresponds to 0 from 2500
+                                                            //2500 is defined by TBPRD
 }
+
+//Exercise 3 Void Functions ---------------------------------------------------------
 void setEPWM8A_RCServo(float angle)
 {
 
-    if(angle >= angle_max) //the saturation limit will be the maximum of the sine wave, so if input exceeds the limit it will return the saturation limit
+    if(angle >= angle_max) //the saturation limit will be the maximum, so if input exceeds the limit it will return the saturation limit
     {
         angle = 90.0;
     }
-    else if(angle <= (-angle_max)) //the same is true for the bottom of the sine wave
+    else if(angle <= (-angle_max)) //the same is true for the bottom of the saturation limit
     {
         angle = -90.0;
     }
-    EPwm8Regs.CMPA.bit.CMPA = (27.778*angle)+5000;
+    EPwm8Regs.CMPA.bit.CMPA = (27.778*angle)+5000; //this scales the duty cycle so that -90 to 90 corresponds to 2500 from 7500
+                                                   //5000 is defined by TBPRD
 }
 
 void setEPWM8B_RCServo(float angle)
 {
 
-    if(angle >= angle_max) //the saturation limit will be the maximum of the sine wave, so if input exceeds the limit it will return the saturation limit
+    if(angle >= angle_max) //the saturation limit will be the maximum, so if input exceeds the limit it will return the saturation limit
     {
         angle = 90.0;
     }
-    else if(angle <= (-angle_max)) //the same is true for the bottom of the sine wave
+    else if(angle <= (-angle_max)) //the same is true for the bottom of the saturation limit
     {
         angle = -90.0;
     }
-    EPwm8Regs.CMPB.bit.CMPB = (27.778*angle)+5000;
+    EPwm8Regs.CMPB.bit.CMPB = (27.778*angle)+5000; //this scales the duty cycle so that -90 to 90 corresponds to 2500 from 7500
+                                                   //5000 is defined by TBPRD
 }

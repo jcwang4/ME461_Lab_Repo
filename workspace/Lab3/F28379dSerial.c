@@ -599,7 +599,7 @@ __interrupt void RXAINT_recv_ready(void)
         serial_sendSCID(&SerialD,tmp,1);
         numRXA ++; //text input will convert to binary on ACSII table, read from right to left in binary, where B7 (left most number)
     }               //will be the right most on oscilloscope. ASCII is missing a bit so it will add a 0 before the P end
-                    //so when typing out, read oscilloscope from right to left to write binary left to write
+                    //so when typing out, read oscilloscope from right to left to write binary left to right
 
     SciaRegs.SCIFFRX.bit.RXFFINTCLR = 1;
     PieCtrlRegs.PIEACK.all = PIEACK_GROUP9;
