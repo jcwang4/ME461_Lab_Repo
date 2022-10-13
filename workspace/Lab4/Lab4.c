@@ -1,4 +1,3 @@
-//test line, doesn't mean anything
 //#############################################################################
 // FILE:   LABstarter_main.c
 //
@@ -33,6 +32,8 @@ __interrupt void cpu_timer0_isr(void);
 __interrupt void cpu_timer1_isr(void);
 __interrupt void cpu_timer2_isr(void);
 __interrupt void SWI_isr(void);
+
+//had to also define interrupts for the ADC, this will allow an interrupt to run once the ADC is done
 __interrupt void ADCD_ISR(void);
 __interrupt void ADCA_ISR(void);
 __interrupt void ADCB_ISR(void);
@@ -70,11 +71,12 @@ float b[5]={    3.3833240118424500e-02, 2.4012702387971543e-01, 4.52079472003720
 float c[22]={   -2.3890045153263611e-03,    -3.3150057635348224e-03,    -4.6136191242627002e-03,    -4.1659855521681268e-03,    1.4477422497795286e-03, 1.5489414225159667e-02, 3.9247886844071371e-02, 7.0723964095458614e-02, 1.0453473887246176e-01, 1.3325672639406205e-01, 1.4978314227429904e-01, 1.4978314227429904e-01, 1.3325672639406205e-01, 1.0453473887246176e-01, 7.0723964095458614e-02, 3.9247886844071371e-02, 1.5489414225159667e-02, 1.4477422497795286e-03, -4.1659855521681268e-03,    -4.6136191242627002e-03,    -3.3150057635348224e-03,    -2.3890045153263611e-03};
 float r[32]={   -1.6466950312719205e-03,    -1.9674478273332152e-03,    -2.5003674400324240e-03,    -2.9684278771570597e-03,    -2.8446917171801697e-03,    -1.4277801151067985e-03,    2.0225586357400412e-03, 8.1147975336387096e-03, 1.7155263118799242e-02, 2.9016348842214112e-02, 4.3076083572491840e-02, 5.8248706435185670e-02, 7.3107780287600024e-02, 8.6084070804293089e-02, 9.5704111083060386e-02, 1.0082568969505851e-01, 1.0082568969505851e-01, 9.5704111083060386e-02, 8.6084070804293089e-02, 7.3107780287600024e-02, 5.8248706435185670e-02, 4.3076083572491840e-02, 2.9016348842214112e-02, 1.7155263118799242e-02, 8.1147975336387096e-03, 2.0225586357400412e-03, -1.4277801151067985e-03,    -2.8446917171801697e-03,    -2.9684278771570597e-03,    -2.5003674400324240e-03,    -1.9674478273332152e-03,    -1.6466950312719205e-03};
 float t[49]={   3.8168083579915922e-03, -3.4589333708678368e-03,    -6.9147551447963727e-03,    -1.3631840702259425e-04,    1.0188680261934764e-02, 7.6317848865174150e-03, -1.0000510607010774e-02,    -1.8517416378068072e-02,    1.4850797269400468e-03, 2.7051273313302662e-02, 1.6406730861711030e-02, -2.4772459719301049e-02,    -3.7527313932122899e-02,    6.5024645833607099e-03, 5.0126312962860256e-02, 2.4285061681454740e-02, -4.3316187535560775e-02,    -5.5017696936151023e-02,    1.4590312162091180e-02, 6.9780627184860167e-02, 2.6733509259813232e-02, -5.8307031134456164e-02,    -6.3049508354328390e-02,    2.2686450611081498e-02, 7.7463632124324944e-02, 2.2686450611081498e-02, -6.3049508354328390e-02,    -5.8307031134456164e-02,    2.6733509259813232e-02, 6.9780627184860167e-02, 1.4590312162091180e-02, -5.5017696936151023e-02,    -4.3316187535560775e-02,    2.4285061681454740e-02, 5.0126312962860256e-02, 6.5024645833607099e-03, -3.7527313932122899e-02,    -2.4772459719301049e-02,    1.6406730861711030e-02, 2.7051273313302662e-02, 1.4850797269400468e-03, -1.8517416378068072e-02,    -1.0000510607010774e-02,    7.6317848865174150e-03, 1.0188680261934764e-02, -1.3631840702259425e-04,    -6.9147551447963727e-03,    -3.4589333708678368e-03,    3.8168083579915922e-03};
+//using MATLAB, we can define different cutoff frequencies and band frequences. For the 31st order filter, it'll only pass values around 2000 Hz
 
 //variables for ADCD
-int16_t adcd0result = 0;
+int16_t adcd0result = 0; //defined a result variable to take the value from the ADC register
 int16_t adcd1result = 0;
-float volt_adcd0 = 0.0;
+float volt_adcd0 = 0.0; //then by using the result variable could but the adc back to voltage
 float volt_adcd1 = 0.0;
 
 //variables for ADCA
@@ -84,20 +86,14 @@ float volt_adca2 = 0.0;
 float volt_adca3 = 0.0;
 
 //variables for ADCB
-int16_t adcb4result = 0;
+int16_t adcb4result = 0; //only one microphone so only one result was needed
 float volt_adcb4 = 0.0;
-
-//This function sets DACA to the voltage between 0V and 3V passed to this function.
-//If outside 0V to 3V the output is saturated at 0V to 3V
-//Example code
-//float myu = 2.25;
-//setDACA(myu); // DACA will now output 2.25 Volts
 
 //these are void functions that will take the ADC and return it to voltage
 void setDACA(float dacouta0)
 {
-    if (dacouta0 > 3.0) dacouta0 = 3.0;
-    if (dacouta0 < 0.0) dacouta0 = 0.0;
+    if (dacouta0 > 3.0) dacouta0 = 3.0;//This function sets DACA to the voltage between 0V and 3V passed to this function.
+    if (dacouta0 < 0.0) dacouta0 = 0.0;//If outside 0V to 3V the output is saturated at 0V to 3V
     DacaRegs.DACVALS.bit.DACVALS = dacouta0*(4096.0/3.0); // perform scaling of 0-3 to 0-4095
 }
 
@@ -378,7 +374,7 @@ void main(void)
     DELAY_US(1000);
     //Select the channels to convert and end of conversion flag
 
-    //ADCA, defined for use with the joystick
+    //ADCA, defined for use with the joy stick
     AdcaRegs.ADCSOC0CTL.bit.CHSEL = 2; //SOC0 will convert Channel you choose Does not have to be A0, uses channel 2
     AdcaRegs.ADCSOC0CTL.bit.ACQPS = 99; //sample window is acqps + 1 SYSCLK cycles = 500ns
     AdcaRegs.ADCSOC0CTL.bit.TRIGSEL = 0xD;// EPWM5 ADCSOCA or another trigger you choose will trigger SOC0
@@ -388,6 +384,7 @@ void main(void)
     AdcaRegs.ADCINTSEL1N2.bit.INT1SEL = 1; //set to last SOC that is converted and it will set INT1 flag ADCA1
     AdcaRegs.ADCINTSEL1N2.bit.INT1E = 1; //enable INT1 flag
     AdcaRegs.ADCINTFLGCLR.bit.ADCINT1 = 1; //make sure INT1 flag is cleared
+//although SOC0 must be triggered first, it does not necessarily have to be the first ADC channel
 
     //ADCB, defined for use with the microphone. Only one microphone so only one ADC was needed
     AdcbRegs.ADCSOC0CTL.bit.CHSEL = 4; //SOC0 will convert Channel you choose Does not have to be B0, uses channel 4
@@ -464,7 +461,7 @@ void main(void)
     while(1)
     {
         if (UARTPrint == 1 ) {
-            serial_printf(&SerialA,"ADCINB4 Voltage:%f \r\n",volt_adcb4); //this print function was changed based off what was being viewd
+            serial_printf(&SerialA,"ADCINB4 Voltage:%f \r\n",volt_adcb4); //this print function was changed based off what was being viewed
             UARTPrint = 0;
         }
     }
@@ -548,7 +545,7 @@ __interrupt void ADCD_ISR(void)
     volt_adcd0 = adcd0result*(3.0/4096.0); // Here covert ADCIND0 to volts
     volt_adcd1 = adcd1result*(3.0/4096.0); // Here covert ADCIND1 to volts
 
-    int16_t j = 0; //initialize the array
+    int16_t j = 0; //initialize the starting point of the array
 
     x[0] = volt_adcd0; //initialize the array at the first ADC value
     yk = 0;
@@ -556,7 +553,7 @@ __interrupt void ADCD_ISR(void)
     for(j = 0; j < LENGTH; j++) //for loop that will make an array of LENGTH, which is defined above
     {
 
-        yk += c[j]*x[j]; //this mimics the commented out function below, where instead of individaully multiplying it will
+        yk += c[j]*x[j]; //this mimics the commented out function below, where instead of individually multiplying it will
         // multiply and add together to make the function
     }
 
@@ -564,6 +561,8 @@ __interrupt void ADCD_ISR(void)
     {
         x[j] = x[j-1]; //this make it so that previous states are saved
     }
+    //must increment downwards because if you increment upwards, every state would be the same
+    //x[1] = x[1+1] would mean that x[2] is just equal to x[1] and so forth
 
     /* this is the code originally used for the 4th order filter, this is commented out as it is not needed with for loops
     yk = b[0]*x[0] + b[1]*x[1] + b[2]*x[2] + b[3]*x[3] + b[4]*x[4];
@@ -582,7 +581,7 @@ __interrupt void ADCD_ISR(void)
         UARTPrint = 1;
     }
 
-    AdcdRegs.ADCINTFLGCLR.bit.ADCINT1 = 1; //clear interrupt flag
+    AdcdRegs.ADCINTFLGCLR.bit.ADCINT1 = 1; //clear interrupt flag so that ADC can run again
     PieCtrlRegs.PIEACK.all = PIEACK_GROUP1;
 }
 
@@ -603,8 +602,8 @@ __interrupt void ADCA_ISR(void)
     for(j = 0; j < LENGTH; j++) //for loop that will make an array of LENGTH, which is defined above
     {
 
-        yk += c[j]*x[j]; //this mimics the commented out function below, where instead of individaully multiplying it will
-        // multuply and add together to make the function
+        yk += c[j]*x[j]; //this mimics the commented out function below, where instead of individually multiplying it will
+        // Multiply and add together to make the function
     }
 
     for(j=LENGTH-1; j > 0 ; j --)// then this function increments downwards
@@ -619,8 +618,8 @@ __interrupt void ADCA_ISR(void)
     for(j = 0; j < LENGTH; j++) //for loop that will make an array of LENGTH, which is defined above
     {
 
-        zk += c[j]*m[j]; //this mimics the commented out function below, where instead of individaully multiplying it will
-        // multuply and add together to make the function
+        zk += c[j]*m[j]; //this mimics the commented out function below, where instead of individually multiplying it will
+        // Multiply and add together to make the function
     }
 
     for(j=LENGTH-1; j > 0 ; j --)// then this function increments downwards
@@ -664,9 +663,8 @@ __interrupt void ADCB_ISR(void)
 
     for(j = 0; j < LENGTH; j++) //for loop that will make an array of LENGTH, which is defined above
     {
-
-        ek += t[j]*x[j]; //this mimics the commented out function below, where instead of individaully multiplying it will
-        // multuply and add together to make the function
+        ek += t[j]*x[j]; //this mimics the commented out function below, where instead of individually multiplying it will
+        // Multiply and add together to make the function
     }
 
     for(j=LENGTH-1; j > 0 ; j --)// then this function increments downwards
@@ -675,6 +673,8 @@ __interrupt void ADCB_ISR(void)
     }
 
     setDACA(ek+1.5);// Here write voltages value to DACA
+//we add the 1.5 because the amplitude is 3, so if the 1.5 is added there will be negative values that are not seen
+//the 1.5 centers the data
 
     ADCBInterruptCount++;
     if ((ADCBInterruptCount % 100) == 0)
@@ -686,3 +686,4 @@ __interrupt void ADCB_ISR(void)
     PieCtrlRegs.PIEACK.all = PIEACK_GROUP1;
     GpioDataRegs.GPBCLEAR.bit.GPIO52 = 1;//this clears the GPIO pin
 }
+//the 31st order filter will provide a delay of 10 ms, which is not very usable for certain applications but provides good sampling
