@@ -477,8 +477,6 @@ __interrupt void SWI_isr(void) {
     asm("       NOP");                    // Wait one cycle
     EINT;                                 // Clear INTM to enable interrupts
 
-
-
     // Insert SWI ISR Code here.......
 
 
