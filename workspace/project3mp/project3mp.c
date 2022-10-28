@@ -40,6 +40,27 @@ extern uint32_t numRXA;
 uint16_t UARTPrint = 0;
 uint16_t LEDdisplaynum = 0;
 
+//global variables we defined for the robot motors, servo motors, and the song length
+int16_t updown = 1;
+float saturation_limit = 10.0; //motor will only go from -10 to 10
+float angle_max = 90.0; //servo can only go from -90 to 90 degrees
+float myeffort = 0.0;
+float servoeffort = 0.0;
+int16_t updown_motor = 1;
+int16_t updown_servo = 1;
+uint16_t length = 0;
+
+//more variable definitions
+uint16_t ADC1 = 0;
+uint16_t ADC2 = 0;
+uint16_t second = 0;
+uint16_t minute = 0;
+uint16_t hour = 0;
+uint16_t day = 0;
+uint16_t date = 0;
+uint16_t month = 0;
+uint16_t year = 0;
+
 //Predefinition of the I2CB_Init function
 void I2CB_Init(void);
 
@@ -49,6 +70,16 @@ uint16_t ReadDAN777ADC(uint16_t *ADC1, uint16_t *ADC2);
 uint16_t WriteDS1388Z(uint16_t second,uint16_t minute,uint16_t hour,uint16_t day,uint16_t date,uint16_t month,uint16_t year);
 uint16_t ReadDS1388Z(uint16_t *second,uint16_t *minute,uint16_t *hour,uint16_t *day,uint16_t *date,uint16_t *month,uint16_t *year);
 uint16_t I2CReadWrite = 0;
+
+char dayarray [8][10] = {{'N','o','n','e', 0, 0, 0, 0, 0, 0},
+                         {'S','u','n','d','a','y',0,0,0,0},
+                         {'M','o','n','d','a','y',0,0,0,0},
+                         {'T','u','e','s','d','a','y', 0, 0,0},
+                         {'W','e','d','n','e','s','d','a','y',0},
+                         {'T','h','u','r','s','d','a','y',0,0},
+                         {'F','r','i','d','a','y',0,0,0,0},
+                         {'S','a','t','u', 'r', 'd','a','y',0,0}
+};
 
 void main(void)
 {
@@ -295,15 +326,15 @@ void main(void)
     while(1)
     {
         if (UARTPrint == 1 ) {
-            serial_printf(&SerialA,"RC Servo:%f ADC: %f Clock: %ld\r\n",WriteDAN777RCServo, ReadDAN777ADC, ReadDS1388Z);
+            serial_printf(&SerialA,"ADC1:%d ADC2: %d %s %d/%d/%d %d:%d:%d \r\n",ADC1, ADC2, dayarray[day], month, date, year, hour, minute, second);
             UARTPrint = 0;
         }
         //Writes and reads the DAN777 and also reads the clock chip
         if (I2CReadWrite == 1)
         {
-            uint16_t WriteDAN777RCServo(uint16_t RC1, uint16_t RC2);
-            uint16_t ReadDAN777ADC(uint16_t *ADC1, uint16_t *ADC2);
-            uint16_t ReadDS1388Z(uint16_t *second,uint16_t *minute,uint16_t *hour,uint16_t *day,uint16_t *date,uint16_t *month,uint16_t *year);
+            WriteDAN777RCServo(servoeffort, servoeffort);
+            ReadDAN777ADC(&ADC1, &ADC2);
+            ReadDS1388Z(&second, &minute, &hour, &day, &date, &month, &year);
             I2CReadWrite = 0;
         }
     }
@@ -359,7 +390,29 @@ __interrupt void cpu_timer0_isr(void)
 // cpu_timer1_isr - CPU Timer1 ISR
 __interrupt void cpu_timer1_isr(void)
 {
+    if (servoeffort >= 5200 ) //if servoeffort is greater than 90, then updown_servo will be set to 0
+    {
+        updown_servo = 0;
+    }
+    else if (servoeffort <= 1200) //when servoeffort is less than -10, it will be set to 1
+    {
+        updown_servo = 1;
+    }
 
+    if (updown_servo == 1)
+    {
+        servoeffort += 10; //increments servo upwards
+    }
+    else
+    {
+        servoeffort -= 10; //increments servo downwards
+    }
+
+    I2CReadWrite = 1;
+
+    if ((CpuTimer1.InterruptCount % 5) == 0) {
+        UARTPrint = 1;
+    }
 
     CpuTimer1.InterruptCount++;
 }
@@ -367,16 +420,13 @@ __interrupt void cpu_timer1_isr(void)
 // cpu_timer2_isr CPU Timer2 ISR
 __interrupt void cpu_timer2_isr(void)
 {
-    I2CReadWrite = 1;
 
     // Blink LaunchPad Blue LED
     GpioDataRegs.GPATOGGLE.bit.GPIO31 = 1;
 
     CpuTimer2.InterruptCount++;
 
-    if ((CpuTimer2.InterruptCount % 50) == 0) {
-        UARTPrint = 1;
-    }
+
 }
 
 void I2CB_Init(void)
@@ -406,11 +456,11 @@ void I2CB_Init(void)
 }
 
 //Write 2 16bit commands (LSB then MSB) to I2C Slave DAN777 starting at DAN777's register 4,
-uint16_t WriteDAN777RCServo(uint16_t RC1, uint16_t RC2);
+uint16_t WriteDAN777RCServo(uint16_t RC1, uint16_t RC2)
 {
     //defines local RC servo variables
     uint16_t rc1LSB = 0;
-    uint16_t rc11MSB = 0;
+    uint16_t rc1MSB = 0;
     uint16_t rc2LSB = 0;
     uint16_t rc2MSB = 0;
 
@@ -480,7 +530,7 @@ uint16_t WriteDAN777RCServo(uint16_t RC1, uint16_t RC2);
 // This allows Rval1 and Rval2 to be changed inside the function and return
 // the values read inside the function.
 
-uint16_t ReadDAN777ADC(uint16_t *ADC1, uint16_t *ADC2);
+uint16_t ReadDAN777ADC(uint16_t *ADC1, uint16_t *ADC2)
 {
     uint16_t adc1LSB = 0;
     uint16_t adc1MSB = 0;
@@ -501,8 +551,8 @@ uint16_t ReadDAN777ADC(uint16_t *ADC1, uint16_t *ADC2);
     while(!I2cbRegs.I2CSTR.bit.XRDY); //Poll until I2C ready to Transmit
 
     I2cbRegs.I2CSAR.all = 0x25; // I2C address of DAN777
-    I2cbRegs.I2CCNT.all = 0; // Just Sending Address to start reading from
-    I2cbRegs.I2CDXR.all = 10; // Start Reading at this Register location
+    I2cbRegs.I2CCNT = 1; // Just Sending Address to start reading from
+    I2cbRegs.I2CDXR.all = 0; // Start Reading at this Register location
 
     // I2C in master mode (MST), I2C is in transmit mode (TRX) with start
     I2cbRegs.I2CMDR.all = 0x6620;
@@ -558,39 +608,41 @@ uint16_t ReadDAN777ADC(uint16_t *ADC1, uint16_t *ADC2);
 }
 
 //Write 7 8bit commands (LSB then MSB) to I2C Slave DS1388 starting at DS1388's register 4,
-uint16_t WriteDS1388Z(uint16_t second,uint16_t minute,uint16_t hour,uint16_t day,uint16_t date,uint16_t month,uint16_t year);
+uint16_t WriteDS1388Z(uint16_t second,uint16_t minute,uint16_t hour,uint16_t day,uint16_t date,uint16_t month,uint16_t year)
 {
     //defines time variables
-    uint16_t secondLSB = 0;
-    uint16_t secondMSB = 0;
-    uint16_t minuteLSB = 0;
-    uint16_t minuteMSB = 0;
-    uint16_t hourLSB = 0;
-    uint16_t hourMSB = 0;
-    uint16_t dayLSB= 0;
-    uint16_t dayMSB= 0;
-    uint16_t dateLSB = 0;
-    uint16_t dateMSB = 0;
-    uint16_t monthLSB = 0;
-    uint16_t monthMSB = 0;
-    uint16_t yearLSB = 0;
-    uint16_t yearMSB = 0;
+    uint16_t secondReg = 0;
+    uint16_t minuteReg = 0;
+    uint16_t hourReg = 0;
+    uint16_t dayReg= 0;
+    uint16_t dateReg = 0;
+    uint16_t monthReg = 0;
+    uint16_t yearReg = 0;
 
-    //shifts the time inputs and assigns them to the variables
-    secondLSB = second & 0xF; //Bottom 4 bits of command
-    secondMSB = (RC1 >> 4) & 0xF; //Top 4 bits of command
-    minuteLSB = minute & 0xF; //Bottom 4 bits of command
-    minuteMSB = (RC2 >> 4) & 0xF; //Top 4 bits of command
-    hourLSB = second & 0xF; //Bottom 4 bits of command
-    hourMSB = (RC1 >> 4) & 0xF; //Top 4 bits of command
-    dayLSB = minute & 0xF; //Bottom 4 bits of command
-    dayMSB = (RC2 >> 4) & 0xF; //Top 4 bits of command
-    dateLSB = second & 0xF; //Bottom 4 bits of command
-    dateMSB = (RC1 >> 4) & 0xF; //Top 4 bits of command
-    monthLSB = minute & 0xF; //Bottom 4 bits of command
-    monthMSB = (RC2 >> 4) & 0xF; //Top 4 bits of command
-    yearLSB = second & 0xF; //Bottom 4 bits of command
-    yearMSB = (RC1 >> 4) & 0xF; //Top 4 bits of command
+//    //shifts the time inputs and assigns them to the variables
+//    secondLSB = second & 0xF; //Bottom 4 bits of command
+//    secondMSB = (second >> 4) & 0xF; //Top 4 bits of command
+//    minuteLSB = minute & 0xF; //Bottom 4 bits of command
+//    minuteMSB = (minute >> 4) & 0xF; //Top 4 bits of command
+//    hourLSB = hour & 0xF; //Bottom 4 bits of command
+//    hourMSB = (hour >> 4) & 0xF; //Top 4 bits of command
+//    dayLSB = day & 0xF; //Bottom 4 bits of command
+//    dayMSB = (day >> 4) & 0xF; //Top 4 bits of command
+//    dateLSB = date & 0xF; //Bottom 4 bits of command
+//    dateMSB = (date >> 4) & 0xF; //Top 4 bits of command
+//    monthLSB = month & 0xF; //Bottom 4 bits of command
+//    monthMSB = (month >> 4) & 0xF; //Top 4 bits of command
+//    yearLSB = year & 0xF; //Bottom 4 bits of command
+//    yearMSB = (year >> 4) & 0xF; //Top 4 bits of command
+
+    secondReg = (second / 10 ) <<4 | ((second % 10) & 0xF);
+    minuteReg = (minute / 10 ) <<4 | ((minute % 10) & 0xF);
+    hourReg = (hour / 10 ) <<4 | ((hour % 10) & 0xF);
+    dayReg = (day / 10 ) <<4 | ((day % 10) & 0xF);
+    dateReg = (date / 10 ) <<4 | ((date % 10) & 0xF);
+    monthReg = (month / 10 ) <<4 | ((month % 10) & 0xF);
+    yearReg = (year / 10 ) <<4 | ((year % 10) & 0xF);
+
 
     DELAY_US(200); // Allow time for I2C to finish up previous commands. It pains me to have this
     // delay here but I have not had time to figure out what status bit to poll on to
@@ -613,126 +665,67 @@ uint16_t WriteDS1388Z(uint16_t second,uint16_t minute,uint16_t hour,uint16_t day
     I2cbRegs.I2CMDR.all = 0x6E20;
 
     while(!I2cbRegs.I2CSTR.bit.XRDY); //Poll until I2C ready to Transmit
-    I2cbRegs.I2CDXR.all = secondLSB; // Write RC 1 LSB
+    I2cbRegs.I2CDXR.all = secondReg; // Write RC 1 LSB
     if (I2cbRegs.I2CSTR.bit.NACK == 1) // Check for No Acknowledgement
     {
         return 3; // This should not happen
     }
 
     while(!I2cbRegs.I2CSTR.bit.XRDY); //Poll until I2C ready to Transmit
-    I2cbRegs.I2CDXR.all = secondMSB; // Write RC 1 MSB
+    I2cbRegs.I2CDXR.all = minuteReg; // Write RC 2 LSB
     if (I2cbRegs.I2CSTR.bit.NACK == 1) // Check for No Acknowledgement
     {
         return 3; // This should not happen
     }
 
     while(!I2cbRegs.I2CSTR.bit.XRDY); //Poll until I2C ready to Transmit
-    I2cbRegs.I2CDXR.all = minuteLSB; // Write RC 2 LSB
+    I2cbRegs.I2CDXR.all = hourReg; // Write RC 1 LSB
     if (I2cbRegs.I2CSTR.bit.NACK == 1) // Check for No Acknowledgement
     {
         return 3; // This should not happen
     }
 
     while(!I2cbRegs.I2CSTR.bit.XRDY); //Poll until I2C ready to Transmit
-    I2cbRegs.I2CDXR.all = minuteMSB; // Write RC 2 MSB
-    // After this write since I2CCNT = 0, A Stop condition will be issued
-    if (I2cbRegs.I2CSTR.bit.NACK == 1)
-    {
-        return 3;
-    }
-
-    while(!I2cbRegs.I2CSTR.bit.XRDY); //Poll until I2C ready to Transmit
-    I2cbRegs.I2CDXR.all = hourLSB; // Write RC 1 LSB
+    I2cbRegs.I2CDXR.all = dayReg; // Write RC 2 LSB
     if (I2cbRegs.I2CSTR.bit.NACK == 1) // Check for No Acknowledgement
     {
         return 3; // This should not happen
     }
 
     while(!I2cbRegs.I2CSTR.bit.XRDY); //Poll until I2C ready to Transmit
-    I2cbRegs.I2CDXR.all = hourMSB; // Write RC 1 MSB
+    I2cbRegs.I2CDXR.all = dateReg; // Write RC 2 LSB
     if (I2cbRegs.I2CSTR.bit.NACK == 1) // Check for No Acknowledgement
     {
         return 3; // This should not happen
     }
 
     while(!I2cbRegs.I2CSTR.bit.XRDY); //Poll until I2C ready to Transmit
-    I2cbRegs.I2CDXR.all = dayLSB; // Write RC 2 LSB
+    I2cbRegs.I2CDXR.all = monthReg; // Write RC 1 LSB
     if (I2cbRegs.I2CSTR.bit.NACK == 1) // Check for No Acknowledgement
     {
         return 3; // This should not happen
     }
 
     while(!I2cbRegs.I2CSTR.bit.XRDY); //Poll until I2C ready to Transmit
-    I2cbRegs.I2CDXR.all = dayMSB; // Write RC 2 MSB
-    // After this write since I2CCNT = 0, A Stop condition will be issued
-    if (I2cbRegs.I2CSTR.bit.NACK == 1)
-    {
-        return 3;
-    }
-
-    while(!I2cbRegs.I2CSTR.bit.XRDY); //Poll until I2C ready to Transmit
-    I2cbRegs.I2CDXR.all = dateLSB; // Write RC 2 LSB
+    I2cbRegs.I2CDXR.all = yearReg; // Write RC 2 LSB
     if (I2cbRegs.I2CSTR.bit.NACK == 1) // Check for No Acknowledgement
     {
         return 3; // This should not happen
     }
 
-    while(!I2cbRegs.I2CSTR.bit.XRDY); //Poll until I2C ready to Transmit
-    I2cbRegs.I2CDXR.all = dateMSB; // Write RC 2 MSB
-    // After this write since I2CCNT = 0, A Stop condition will be issued
-    if (I2cbRegs.I2CSTR.bit.NACK == 1)
-    {
-        return 3;
-    }
-
-    while(!I2cbRegs.I2CSTR.bit.XRDY); //Poll until I2C ready to Transmit
-    I2cbRegs.I2CDXR.all = monthLSB; // Write RC 1 LSB
-    if (I2cbRegs.I2CSTR.bit.NACK == 1) // Check for No Acknowledgement
-    {
-        return 3; // This should not happen
-    }
-
-    while(!I2cbRegs.I2CSTR.bit.XRDY); //Poll until I2C ready to Transmit
-    I2cbRegs.I2CDXR.all = monthMSB; // Write RC 1 MSB
-    if (I2cbRegs.I2CSTR.bit.NACK == 1) // Check for No Acknowledgement
-    {
-        return 3; // This should not happen
-    }
-
-    while(!I2cbRegs.I2CSTR.bit.XRDY); //Poll until I2C ready to Transmit
-    I2cbRegs.I2CDXR.all = yearLSB; // Write RC 2 LSB
-    if (I2cbRegs.I2CSTR.bit.NACK == 1) // Check for No Acknowledgement
-    {
-        return 3; // This should not happen
-    }
-
-    while(!I2cbRegs.I2CSTR.bit.XRDY); //Poll until I2C ready to Transmit
-    I2cbRegs.I2CDXR.all = yearMSB; // Write RC 2 MSB
-    // After this write since I2CCNT = 0, A Stop condition will be issued
-    if (I2cbRegs.I2CSTR.bit.NACK == 1)
-    {
-        return 3;
-    }
     return 0;
 }
 
-uint16_t ReadDS1388Z(uint16_t *second,uint16_t *minute,uint16_t *hour,uint16_t *day,uint16_t *date,uint16_t *month,uint16_t *year);
+uint16_t ReadDS1388Z(uint16_t *second,uint16_t *minute,uint16_t *hour,uint16_t *day,uint16_t *date,uint16_t *month,uint16_t *year)
 {
     //defines time variables
-    uint16_t secondLSB = 0;
-    uint16_t secondMSB = 0;
-    uint16_t minuteLSB = 0;
-    uint16_t minuteMSB = 0;
-    uint16_t hourLSB = 0;
-    uint16_t hourMSB = 0;
-    uint16_t dayLSB= 0;
-    uint16_t dayMSB= 0;
-    uint16_t dateLSB = 0;
-    uint16_t dateMSB = 0;
-    uint16_t monthLSB = 0;
-    uint16_t monthMSB = 0;
-    uint16_t yearLSB = 0;
-    uint16_t yearMSB = 0;
+    uint16_t secondRead = 0;
+    uint16_t minuteRead = 0;
+    uint16_t hourRead = 0;
+    uint16_t dayRead= 0;
+    uint16_t dateRead = 0;
+    uint16_t monthRead = 0;
+    uint16_t yearRead = 0;
 
     DELAY_US(200); // Allow time for I2C to finish up previous commands. It pains me to have this
     // delay here but I have not had time to figure out what status bit to poll on to
@@ -748,8 +741,8 @@ uint16_t ReadDS1388Z(uint16_t *second,uint16_t *minute,uint16_t *hour,uint16_t *
     while(!I2cbRegs.I2CSTR.bit.XRDY); //Poll until I2C ready to Transmit
 
     I2cbRegs.I2CSAR.all = 0x68; // I2C address of DAN777
-    I2cbRegs.I2CCNT.all = 0; // Just Sending Address to start reading from
-    I2cbRegs.I2CDXR.all = 10; // Start Reading at this Register location
+    I2cbRegs.I2CCNT = 1; // Just Sending Address to start reading from
+    I2cbRegs.I2CDXR.all = 1; // Start Reading at this Register location
 
     // I2C in master mode (MST), I2C is in transmit mode (TRX) with start
     I2cbRegs.I2CMDR.all = 0x6620;
@@ -762,7 +755,7 @@ uint16_t ReadDS1388Z(uint16_t *second,uint16_t *minute,uint16_t *hour,uint16_t *
     while(!I2cbRegs.I2CSTR.bit.XRDY); //Poll until I2C ready to Transmit
 
     I2cbRegs.I2CSAR.all = 0x68; // I2C address of DAN777
-    I2cbRegs.I2CCNT = 4; // I2C in master mode (MST), TRX=0, receive mode start stop
+    I2cbRegs.I2CCNT = 7; // I2C in master mode (MST), TRX=0, receive mode start stop
     I2cbRegs.I2CMDR.all = 0x6C20; // Reissuing another Start with Read
 
     if (I2cbRegs.I2CSTR.bit.NACK == 1)
@@ -771,107 +764,62 @@ uint16_t ReadDS1388Z(uint16_t *second,uint16_t *minute,uint16_t *hour,uint16_t *
     }
 
     while(!I2cbRegs.I2CSTR.bit.RRDY); //Poll until I2C has Recieved 8 bit value
-    secondLSB = I2cbRegs.I2CDRR.all; // Read CHIPXYZ
+    secondRead = I2cbRegs.I2CDRR.all; // Read CHIPXYZ
     if (I2cbRegs.I2CSTR.bit.NACK == 1)
     {
         return 3;
     }
 
     while(!I2cbRegs.I2CSTR.bit.RRDY); //Poll until I2C has Recieved 8 bit value
-    secondMSB = I2cbRegs.I2CDRR.all; // Read CHIPXYZ
+    minuteRead = I2cbRegs.I2CDRR.all; // Read CHIPXYZ
     if (I2cbRegs.I2CSTR.bit.NACK == 1)
     {
         return 3;
     }
 
     while(!I2cbRegs.I2CSTR.bit.RRDY); //Poll until I2C has Recieved 8 bit value
-    minuteLSB = I2cbRegs.I2CDRR.all; // Read CHIPXYZ
+    hourRead = I2cbRegs.I2CDRR.all; // Read CHIPXYZ
     if (I2cbRegs.I2CSTR.bit.NACK == 1)
     {
         return 3;
     }
 
     while(!I2cbRegs.I2CSTR.bit.RRDY); //Poll until I2C has Recieved 8 bit value
-    minuteMSB = I2cbRegs.I2CDRR.all; // Read CHIPXYZ
+    dayRead = I2cbRegs.I2CDRR.all; // Read CHIPXYZ
     if (I2cbRegs.I2CSTR.bit.NACK == 1)
     {
         return 3;
     }
+
+
     while(!I2cbRegs.I2CSTR.bit.RRDY); //Poll until I2C has Recieved 8 bit value
-    hourLSB = I2cbRegs.I2CDRR.all; // Read CHIPXYZ
+    dateRead = I2cbRegs.I2CDRR.all; // Read CHIPXYZ
     if (I2cbRegs.I2CSTR.bit.NACK == 1)
     {
         return 3;
     }
 
     while(!I2cbRegs.I2CSTR.bit.RRDY); //Poll until I2C has Recieved 8 bit value
-    hourMSB = I2cbRegs.I2CDRR.all; // Read CHIPXYZ
+    monthRead = I2cbRegs.I2CDRR.all; // Read CHIPXYZ
     if (I2cbRegs.I2CSTR.bit.NACK == 1)
     {
         return 3;
     }
 
     while(!I2cbRegs.I2CSTR.bit.RRDY); //Poll until I2C has Recieved 8 bit value
-    dayLSB = I2cbRegs.I2CDRR.all; // Read CHIPXYZ
-    if (I2cbRegs.I2CSTR.bit.NACK == 1)
-    {
-        return 3;
-    }
-
-    while(!I2cbRegs.I2CSTR.bit.RRDY); //Poll until I2C has Recieved 8 bit value
-    dayMSB = I2cbRegs.I2CDRR.all; // Read CHIPXYZ
-    if (I2cbRegs.I2CSTR.bit.NACK == 1)
-    {
-        return 3;
-    }
-    while(!I2cbRegs.I2CSTR.bit.RRDY); //Poll until I2C has Recieved 8 bit value
-    dateLSB = I2cbRegs.I2CDRR.all; // Read CHIPXYZ
-    if (I2cbRegs.I2CSTR.bit.NACK == 1)
-    {
-        return 3;
-    }
-
-    while(!I2cbRegs.I2CSTR.bit.RRDY); //Poll until I2C has Recieved 8 bit value
-    dateMSB = I2cbRegs.I2CDRR.all; // Read CHIPXYZ
-    if (I2cbRegs.I2CSTR.bit.NACK == 1)
-    {
-        return 3;
-    }
-
-    while(!I2cbRegs.I2CSTR.bit.RRDY); //Poll until I2C has Recieved 8 bit value
-    monthLSB = I2cbRegs.I2CDRR.all; // Read CHIPXYZ
-    if (I2cbRegs.I2CSTR.bit.NACK == 1)
-    {
-        return 3;
-    }
-
-    while(!I2cbRegs.I2CSTR.bit.RRDY); //Poll until I2C has Recieved 8 bit value
-    monthMSB = I2cbRegs.I2CDRR.all; // Read CHIPXYZ
-    if (I2cbRegs.I2CSTR.bit.NACK == 1)
-    {
-        return 3;
-    }
-    while(!I2cbRegs.I2CSTR.bit.RRDY); //Poll until I2C has Recieved 8 bit value
-    yearLSB = I2cbRegs.I2CDRR.all; // Read CHIPXYZ
-    if (I2cbRegs.I2CSTR.bit.NACK == 1)
-    {
-        return 3;
-    }
-
-    while(!I2cbRegs.I2CSTR.bit.RRDY); //Poll until I2C has Recieved 8 bit value
-    yearMSB = I2cbRegs.I2CDRR.all; // Read CHIPXYZ
+    yearRead = I2cbRegs.I2CDRR.all; // Read CHIPXYZ
     if (I2cbRegs.I2CSTR.bit.NACK == 1)
     {
         return 3;
     }
 
     // After this read since I2CCNT = 0, A Stop condition will be issued
-    *second = (secondMSB << 8) | (secondLSB & 0xFF);
-    *minute = (minuteMSB << 8) | (minuteLSB & 0xFF);
-    *hour = (hourMSB << 8) | (hourLSB & 0xFF);
-    *day = (dayMSB << 8) | (dayLSB & 0xFF);
-    *date = (dateMSB << 8) | (dateLSB & 0xFF);
-    *month = (monthMSB << 8) | (monthLSB & 0xFF);
-    *year = (yearMSB << 8) | (yearLSB & 0xFF);
+    *second = (secondRead >>4 ) *10 | (secondRead & 0xF);
+    *minute = (minuteRead >>4) *10 | (minuteRead & 0xF);
+    *hour =(hourRead >>4 ) *10 | (hourRead & 0xF);
+    *day = (dayRead >>4 ) *10 | (dayRead & 0xF);
+    *date = (dateRead >>4 ) *10 | (dateRead & 0xF);
+    *month = (monthRead >>4 ) *10 | (monthRead & 0xF);
+    *year = (yearRead >>4 ) *10 | (yearRead & 0xF);
     return 0;
 }
