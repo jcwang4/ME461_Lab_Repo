@@ -321,14 +321,17 @@ void main(void)
     EINT;  // Enable Global interrupt INTM
     ERTM;  // Enable Global realtime interrupt DBGM
 
+    //writes the correct start of the clock chip
+    WriteDS1388Z(0,0,0,1,31,10,22);
 
     // IDLE loop. Just sit and loop forever (optional):
     while(1)
     {
         if (UARTPrint == 1 ) {
-            serial_printf(&SerialA,"ADC1:%d ADC2: %d %s %d/%d/%d %d:%d:%d \r\n",ADC1, ADC2, dayarray[day], month, date, year, hour, minute, second);
+            serial_printf(&SerialA,"ADC1:%d ADC2: %d %s %d/%d/%d %d:%d:%d \r\n",ADC1, ADC2, dayarray[day-1], month, date, year, hour, minute, second);
             UARTPrint = 0;
         }
+
         //Writes and reads the DAN777 and also reads the clock chip
         if (I2CReadWrite == 1)
         {
@@ -390,11 +393,11 @@ __interrupt void cpu_timer0_isr(void)
 // cpu_timer1_isr - CPU Timer1 ISR
 __interrupt void cpu_timer1_isr(void)
 {
-    if (servoeffort >= 5200 ) //if servoeffort is greater than 90, then updown_servo will be set to 0
+    if (servoeffort >= 5200 ) //if servoeffort is greater than 5200, then updown_servo will be set to 0
     {
         updown_servo = 0;
     }
-    else if (servoeffort <= 1200) //when servoeffort is less than -10, it will be set to 1
+    else if (servoeffort <= 1200) //when servoeffort is less than 1200, it will be set to 1
     {
         updown_servo = 1;
     }
@@ -408,9 +411,12 @@ __interrupt void cpu_timer1_isr(void)
         servoeffort -= 10; //increments servo downwards
     }
 
+    //CPU Timer 1 is already set to 20 ms, so the I2CReadWrite will trigger every 20 ms
     I2CReadWrite = 1;
 
-    if ((CpuTimer1.InterruptCount % 5) == 0) {
+    //needs to print every 100 ms, so by using %5 this will call 5*20 ms
+    if ((CpuTimer1.InterruptCount % 5) == 0)
+    {
         UARTPrint = 1;
     }
 
@@ -425,8 +431,6 @@ __interrupt void cpu_timer2_isr(void)
     GpioDataRegs.GPATOGGLE.bit.GPIO31 = 1;
 
     CpuTimer2.InterruptCount++;
-
-
 }
 
 void I2CB_Init(void)
@@ -619,22 +623,6 @@ uint16_t WriteDS1388Z(uint16_t second,uint16_t minute,uint16_t hour,uint16_t day
     uint16_t monthReg = 0;
     uint16_t yearReg = 0;
 
-//    //shifts the time inputs and assigns them to the variables
-//    secondLSB = second & 0xF; //Bottom 4 bits of command
-//    secondMSB = (second >> 4) & 0xF; //Top 4 bits of command
-//    minuteLSB = minute & 0xF; //Bottom 4 bits of command
-//    minuteMSB = (minute >> 4) & 0xF; //Top 4 bits of command
-//    hourLSB = hour & 0xF; //Bottom 4 bits of command
-//    hourMSB = (hour >> 4) & 0xF; //Top 4 bits of command
-//    dayLSB = day & 0xF; //Bottom 4 bits of command
-//    dayMSB = (day >> 4) & 0xF; //Top 4 bits of command
-//    dateLSB = date & 0xF; //Bottom 4 bits of command
-//    dateMSB = (date >> 4) & 0xF; //Top 4 bits of command
-//    monthLSB = month & 0xF; //Bottom 4 bits of command
-//    monthMSB = (month >> 4) & 0xF; //Top 4 bits of command
-//    yearLSB = year & 0xF; //Bottom 4 bits of command
-//    yearMSB = (year >> 4) & 0xF; //Top 4 bits of command
-
     secondReg = (second / 10 ) <<4 | ((second % 10) & 0xF);
     minuteReg = (minute / 10 ) <<4 | ((minute % 10) & 0xF);
     hourReg = (hour / 10 ) <<4 | ((hour % 10) & 0xF);
@@ -658,7 +646,7 @@ uint16_t WriteDS1388Z(uint16_t second,uint16_t minute,uint16_t hour,uint16_t day
     while(!I2cbRegs.I2CSTR.bit.XRDY); //Poll until I2C ready to Transmit
 
     I2cbRegs.I2CSAR.all = 0x68; // I2C address of DS1388
-    I2cbRegs.I2CCNT = 15; //Num Values plus Start Register 4 + 1
+    I2cbRegs.I2CCNT = 8; //Num Values plus Start Register 7 + 1
     I2cbRegs.I2CDXR.all = 1; // First need to transfer the Register value to start writing data
 
     // I2C in master mode (MST), I2C is in transmit mode (TRX) with start and stop
@@ -814,12 +802,12 @@ uint16_t ReadDS1388Z(uint16_t *second,uint16_t *minute,uint16_t *hour,uint16_t *
     }
 
     // After this read since I2CCNT = 0, A Stop condition will be issued
-    *second = (secondRead >>4 ) *10 | (secondRead & 0xF);
-    *minute = (minuteRead >>4) *10 | (minuteRead & 0xF);
-    *hour =(hourRead >>4 ) *10 | (hourRead & 0xF);
-    *day = (dayRead >>4 ) *10 | (dayRead & 0xF);
-    *date = (dateRead >>4 ) *10 | (dateRead & 0xF);
-    *month = (monthRead >>4 ) *10 | (monthRead & 0xF);
-    *year = (yearRead >>4 ) *10 | (yearRead & 0xF);
+    *second = (secondRead >>4 ) *10 + (secondRead & 0xF);
+    *minute = (minuteRead >>4) *10 + (minuteRead & 0xF);
+    *hour =(hourRead >>4 ) *10 + (hourRead & 0xF);
+    *day = (dayRead >>4 ) *10 + (dayRead & 0xF);
+    *date = (dateRead >>4 ) *10 + (dateRead & 0xF);
+    *month = (monthRead >>4 ) *10 + (monthRead & 0xF);
+    *year = (yearRead >>4 ) *10 + (yearRead & 0xF);
     return 0;
 }
