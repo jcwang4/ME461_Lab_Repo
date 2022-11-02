@@ -324,7 +324,7 @@ void main(void)
     ERTM;  // Enable Global realtime interrupt DBGM
 
     //writes the correct start of the clock chip
-    WriteDS1388Z(0,0,0,1,31,10,22);
+    WriteDS1388Z(30,49,12,3,31,10,22);
 
     // IDLE loop. Just sit and loop forever (optional):
     while(1)
