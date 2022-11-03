@@ -52,12 +52,12 @@ int16_t updown = 1;
 float volt_spivalue2 = 0;
 float volt_spivalue3 = 0;
 
-//interrupt intializations
+//interrupt initializations
 int16_t spivalue1 = 0;
 int16_t spivalue2 = 0;
 int16_t spivalue3 = 0;
 
-//excercise 4 intializations
+//Exercise 4 initializations
 int16_t dummy= 0;
 int16_t accelXraw = 0;
 int16_t accelYraw = 0;
@@ -323,6 +323,7 @@ void main(void)
     while(1)
     {
         if (UARTPrint == 1 ) {
+            //Print function that will give all of the Accel and Gyro values
             serial_printf(&SerialA, "Accel X:%f Accel Y:%f Accel Z:%f Gyro X:%f Gyro Y:%f Gyro Z:%f\r\n", accelXreading,  accelYreading, accelZreading, gyroXreading, gyroYreading, gyroZreading);
             UARTPrint = 0;
         }
@@ -350,6 +351,7 @@ __interrupt void SWI_isr(void) {
 // cpu_timer0_isr - CPU Timer0 ISR
 __interrupt void cpu_timer0_isr(void)
 {
+    //all of this needs to commented out so that it doesn't interfere with Excercise 4
     /* Excercise 3
     if(updown == 1) //the global variable is initialized at 1 so the function will start here
     {
@@ -382,8 +384,8 @@ __interrupt void cpu_timer0_isr(void)
     SpibRegs.SPITXBUF = pwm1; // pwm1 defined above
     SpibRegs.SPITXBUF = pwm2; // pwm2 defined above
      */
-    //Beginning of Excercise 4
-    // Code inside CPU Timer 0
+
+    //Beginning of Excercise 4, gives all the SpibRegs
     GpioDataRegs.GPCCLEAR.bit.GPIO66 = 1;
     SpibRegs.SPIFFRX.bit.RXFFIL = 8;
     SpibRegs.SPITXBUF = ((0x8000) | (0x3A00));
@@ -450,27 +452,28 @@ __interrupt void SPIB_isr(void)
     //must read the register three times to get the bits off of the FIFO
     GpioDataRegs.GPASET.bit.GPIO9 = 1; // Set GPIO9 high to end Slave Select.
 
-    volt_spivalue2 = spivalue2*(3.3/4095.0); // Here covert ADCIND0 to volts
-    volt_spivalue3 = spivalue3*(3.3/4095.0); // Here covert ADCIND0 to volts
+    volt_spivalue2 = spivalue2*(3.3/4095.0); // Here covert SPI to volts
+    volt_spivalue3 = spivalue3*(3.3/4095.0); // Here covert SPI to volts
      */
 
     // Code inside SPIB Interrupt Service Routine
 
     GpioDataRegs.GPCSET.bit.GPIO66 = 1;
-    dummy = SpibRegs.SPIRXBUF;
+    dummy = SpibRegs.SPIRXBUF; //don't need the intial SPI so can also pass this to dummy
     accelXraw = SpibRegs.SPIRXBUF;
     accelYraw = SpibRegs.SPIRXBUF;
     accelZraw = SpibRegs.SPIRXBUF;
-    dummy = SpibRegs.SPIRXBUF;
+    dummy = SpibRegs.SPIRXBUF; //by sending to dummy, we don't need another slave select but can pass the temp register and continue
+                               //must read off the fifo
     gyroXraw = SpibRegs.SPIRXBUF;
     gyroYraw = SpibRegs.SPIRXBUF;
     gyroZraw = SpibRegs.SPIRXBUF;
 
-    accelXreading = accelXraw*4.0/32767.0;
+    accelXreading = accelXraw*4.0/32767.0; //changes the raw data to actual accel
     accelYreading = accelYraw*4.0/32767.0;
     accelZreading = accelZraw*4.0/32767.0;
 
-    gyroXreading = gyroXraw*250.0/32767.0;
+    gyroXreading = gyroXraw*250.0/32767.0; //changes the raw data to actual gyro
     gyroYreading = gyroYraw*250.0/32767.0;
     gyroZreading = gyroZraw*250.0/32767.0;
 
@@ -485,7 +488,7 @@ __interrupt void SPIB_isr(void)
 
 void setupSpib(void)
 {
-    int16_t temp = 0;
+    int16_t temp = 0; //warning because temp is never used, but this just serves to put all the garbage in
 
     //Step 1 copies initiliazations and brings them into the setup
     GPIO_SetupPinMux(9, GPIO_MUX_CPU1, 0); // Set as GPIO9 and used as DAN28027 SS
@@ -567,10 +570,10 @@ void setupSpib(void)
     // 0x27, 0x28, 0x29. Use only one SS low to high for all these writes
     // some code is given, most you have to fill you yourself.
     GpioDataRegs.GPCCLEAR.bit.GPIO66 = 1; // Slave Select Low
-    SpibRegs.SPITXBUF = 0x2300; //this calls register 13 to 00
-    SpibRegs.SPITXBUF = 0x408C; //then because the registers will move upwards, this is register 14 and 15 both going to 0
-    SpibRegs.SPITXBUF = 0x0288; //then because the registers will move upwards, this is register 16 and 17 both going to 0
-    SpibRegs.SPITXBUF = 0x0C0A;
+    SpibRegs.SPITXBUF = 0x2300; //this calls register 23 to 00
+    SpibRegs.SPITXBUF = 0x408C; //then because the registers will move upwards, this is register 24 and 25 both going to 40 and 8C
+    SpibRegs.SPITXBUF = 0x0288; //then because the registers will move upwards, this is register 26 and 27 both going to 02 and 88
+    SpibRegs.SPITXBUF = 0x0C0A; //then because the registers will move upwards, this is register 28 and 29 both going to 0C and 0A
     while(SpibRegs.SPIFFRX.bit.RXFFST != 4); // wait for the correct number of 16 bit values to be received into the RX FIFO
     GpioDataRegs.GPCSET.bit.GPIO66 = 1; // Slave Select High
     //read the additional number of garbage receive values off the RX FIFO to clear out the RX FIFO
@@ -639,43 +642,49 @@ void setupSpib(void)
     temp = SpibRegs.SPIRXBUF;
     DELAY_US(10);
 
+    //to correct the offset, first look at Tera term and see what the offset is
+    //then look at the initial values of the hexidecimal and right shift 1 bit, because it is a 15 bit register
+    //to fix the offset, use the initial hex values and the offset to determine whether to go up or down in hex
+    //then add or subtract that to fix the offset
+    //convert back to hex by shifting, as it is a 15 bit register
+    //split into the proper reigsters
     GpioDataRegs.GPCCLEAR.bit.GPIO66 = 1;
-    SpibRegs.SPITXBUF = (0x7700 | 0x00EC); // 0x7700
+    SpibRegs.SPITXBUF = (0x7700 | 0x00EC); // 0x7700, Accel X
     while(SpibRegs.SPIFFRX.bit.RXFFST !=1);
     GpioDataRegs.GPCSET.bit.GPIO66 = 1;
     temp = SpibRegs.SPIRXBUF;
     DELAY_US(10);
 
     GpioDataRegs.GPCCLEAR.bit.GPIO66 = 1;
-    SpibRegs.SPITXBUF = (0x7800 | 0x001E); // 0x7800
+    SpibRegs.SPITXBUF = (0x7800 | 0x001E); // 0x7800, Accel X
     while(SpibRegs.SPIFFRX.bit.RXFFST !=1);
     GpioDataRegs.GPCSET.bit.GPIO66 = 1;
     temp = SpibRegs.SPIRXBUF;
     DELAY_US(10);
 
     GpioDataRegs.GPCCLEAR.bit.GPIO66 = 1;
-    SpibRegs.SPITXBUF = (0x7A00 | 0x000B); // 0x7A00
+    SpibRegs.SPITXBUF = (0x7A00 | 0x000B); // 0x7A00, Accel Y
     while(SpibRegs.SPIFFRX.bit.RXFFST !=1);
     GpioDataRegs.GPCSET.bit.GPIO66 = 1;
     temp = SpibRegs.SPIRXBUF;
     DELAY_US(10);
 
     GpioDataRegs.GPCCLEAR.bit.GPIO66 = 1;
-    SpibRegs.SPITXBUF = (0x7B00 | 0x002C); // 0x7B00
+    SpibRegs.SPITXBUF = (0x7B00 | 0x002C); // 0x7B00, Accel Y
     while(SpibRegs.SPIFFRX.bit.RXFFST !=1);
     GpioDataRegs.GPCSET.bit.GPIO66 = 1;
     temp = SpibRegs.SPIRXBUF;
     DELAY_US(10);
 
     GpioDataRegs.GPCCLEAR.bit.GPIO66 = 1;
-    SpibRegs.SPITXBUF = (0x7D00 | 0x0019); // 0x7D00
+    SpibRegs.SPITXBUF = (0x7D00 | 0x0019); // 0x7D00, Accel Z
     while(SpibRegs.SPIFFRX.bit.RXFFST !=1);
     GpioDataRegs.GPCSET.bit.GPIO66 = 1;
     temp = SpibRegs.SPIRXBUF;
     DELAY_US(10);
 
     GpioDataRegs.GPCCLEAR.bit.GPIO66 = 1;
-    SpibRegs.SPITXBUF = (0x7E00 | 0x0042); // 0x7E00
+    SpibRegs.SPITXBUF = (0x7E00 | 0x0042); // 0x7E00, Accel Z
     while(SpibRegs.SPIFFRX.bit.RXFFST !=1);
     GpioDataRegs.GPCSET.bit.GPIO66 = 1;
     temp = SpibRegs.SPIRXBUF;
