@@ -445,7 +445,7 @@ __interrupt void cpu_timer2_isr(void)
 
 __interrupt void SPIB_isr(void)
 {
-    /* Exercise 3
+    /* Exercise 3 and Exercise 2, I re used the intial code from Excercise 2 to make Excercise 3
     spivalue1 = SpibRegs.SPIRXBUF; // Read first 16 bit value off RX FIFO. Probably is zero since no chip
     spivalue2 = SpibRegs.SPIRXBUF; // Read second 16 bit value off RX FIFO. Again probably zero
     spivalue3 = SpibRegs.SPIRXBUF;
