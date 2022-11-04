@@ -445,7 +445,17 @@ __interrupt void cpu_timer2_isr(void)
 
 __interrupt void SPIB_isr(void)
 {
-    /* Exercise 3 and Exercise 2, I re used the intial code from Excercise 2 to make Excercise 3
+    /*Exercise 2
+    spivalue1 = SpibRegs.SPIRXBUF; // Read first 16 bit value off RX FIFO. Probably is zero since no chip
+    spivalue2 = SpibRegs.SPIRXBUF; // Read second 16 bit value off RX FIFO. Again probably zero
+    //must read the register two times to get the bits off of the FIFO
+    GpioDataRegs.GPASET.bit.GPIO9 = 1; // Set GPIO9 high to end Slave Select.
+
+    SpibRegs.SPIFFRX.bit.RXFFOVFCLR = 1; // Clear Overflow flag just in case of an overflow
+    SpibRegs.SPIFFRX.bit.RXFFINTCLR = 1; // Clear RX FIFO Interrupt flag so next interrupt will happen
+    PieCtrlRegs.PIEACK.all = PIEACK_GROUP6; // Acknowledge INT6 PIE interrupt
+
+    Exercise 3
     spivalue1 = SpibRegs.SPIRXBUF; // Read first 16 bit value off RX FIFO. Probably is zero since no chip
     spivalue2 = SpibRegs.SPIRXBUF; // Read second 16 bit value off RX FIFO. Again probably zero
     spivalue3 = SpibRegs.SPIRXBUF;
@@ -454,10 +464,13 @@ __interrupt void SPIB_isr(void)
 
     volt_spivalue2 = spivalue2*(3.3/4095.0); // Here covert SPI to volts
     volt_spivalue3 = spivalue3*(3.3/4095.0); // Here covert SPI to volts
+
+    SpibRegs.SPIFFRX.bit.RXFFOVFCLR = 1; // Clear Overflow flag just in case of an overflow
+    SpibRegs.SPIFFRX.bit.RXFFINTCLR = 1; // Clear RX FIFO Interrupt flag so next interrupt will happen
+    PieCtrlRegs.PIEACK.all = PIEACK_GROUP6; // Acknowledge INT6 PIE interrupt
      */
 
     // Code inside SPIB Interrupt Service Routine
-
     GpioDataRegs.GPCSET.bit.GPIO66 = 1;
     dummy = SpibRegs.SPIRXBUF; //don't need the intial SPI so can also pass this to dummy
     accelXraw = SpibRegs.SPIRXBUF;
