@@ -79,6 +79,27 @@ float eleft = 0;
 float eright = 0;
 float kpturn = 3;
 
+//Integral variables for Excercise 5
+float WR= 0.56759;
+float RWH = 0.19460;
+float thetaR = 0;
+float thetaL = 0;
+float phi = 0;
+float Xr = 0;
+float Yr = 0;
+float Xr_1 = 0;
+float Yr_1 = 0;
+float leftwheel_K_1 = 0;
+float rightwheel_K_1 = 0;
+float theta_avg = 0;
+float theta_dot_avg = 0;
+float AngVelLeft_K = 0;
+float AngVelRight_K = 0;
+float Xr_dot = 0;
+float Yr_dot = 0;
+float Xr_dot_1 = 0;
+float Yr_dot_1 = 0;
+
 //define functions for later use so that the main function can reference them
 void setEPWM2A(float);
 void setEPWM2B(float);
@@ -408,7 +429,7 @@ void main(void)
     while(1)
     {
         if (UARTPrint == 1 ) {
-            serial_printf(&SerialA, "Left Wheel Feet: %f Right Wheel Feet: %f Left Wheel Vel: %f Right Wheel Vel: %f\r\n", leftwheelft, rightwheelft, VelLeft_K, VelRight_K);
+            serial_printf(&SerialA, "Xr: %f Yr: %f Phi: %f Left Wheel Vel: %f Right Wheel Vel: %f\r\n", Xr, Yr, phi, VelLeft_K, VelRight_K);
             UARTPrint = 0;
         }
     }
@@ -467,8 +488,9 @@ __interrupt void cpu_timer0_isr(void)
     SpibRegs.SPITXBUF = pwm1; // pwm1 defined above
     SpibRegs.SPITXBUF = pwm2; // pwm2 defined above
      */
+
     //Beginning of Excercise 4
-    // Code inside CPU Timer 0
+    //Code inside CPU Timer 0
     GpioDataRegs.GPCCLEAR.bit.GPIO66 = 1;
     SpibRegs.SPIFFRX.bit.RXFFIL = 8;
     SpibRegs.SPITXBUF = ((0x8000) | (0x3A00));
@@ -513,8 +535,18 @@ __interrupt void cpu_timer1_isr(void)
 
     PosLeft_K = leftwheelft;
     PosRight_K = rightwheelft;
-    VelLeft_K = (PosLeft_K-PosLeft_K_1)/.004;
-    VelRight_K = (PosRight_K-PosRight_K_1)/.004;
+    VelLeft_K = (PosLeft_K-PosLeft_K_1)/0.004;
+    VelRight_K = (PosRight_K-PosRight_K_1)/0.004;
+
+    phi = (RWH/WR)*(rightwheel-leftwheel);
+    theta_avg = 0.5*(rightwheel+leftwheel);
+    AngVelLeft_K = (leftwheel - leftwheel_K_1)/0.004;
+    AngVelRight_K = (rightwheel - rightwheel_K_1)/0.004;
+    theta_dot_avg = 0.5*(AngVelLeft_K + AngVelRight_K);
+    Xr_dot = RWH*theta_dot_avg*(cos(phi));
+    Yr_dot = RWH*theta_dot_avg*(sin(phi));
+    Xr = Xr_1+ 0.004*((Xr_dot + Xr_dot_1)/2);
+    Yr = Yr_1 + 0.004*((Yr_dot + Yr_dot_1)/2);
 
     eturn = turn + (VelLeft_K - VelRight_K);
 
@@ -542,10 +574,16 @@ __interrupt void cpu_timer1_isr(void)
 
     PosLeft_K_1 = PosLeft_K;
     PosRight_K_1 = PosRight_K;
+    leftwheel_K_1 = leftwheel;
+    rightwheel_K_1 = rightwheel;
     ek_left_1 = ek_left;
     ek_right_1 = ek_right;
     IK_left_1 = IK_left;
     IK_right_1 = IK_right;
+    Xr_1 = Xr;
+    Yr_1 = Yr;
+    Xr_dot_1 = Xr_dot;
+    Yr_dot_1 = Yr_dot;
 
     CpuTimer1.InterruptCount++;
 }

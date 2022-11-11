@@ -609,6 +609,8 @@ __interrupt void RXAINT_recv_ready(void)
             Vref = Vref + 0.1;
         } else if (RXAdata == 's') {
             Vref = Vref - 0.1;
+        } else if (RXAdata == '1') {
+            Vref = 1;
         } else {
             turn = 0;
             Vref = 0.0;
