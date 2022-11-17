@@ -599,7 +599,9 @@ __interrupt void RXAINT_recv_ready(void)
         SciaRegs.SCIFFRX.bit.RXFIFORESET = 0;
         SciaRegs.SCIFFRX.bit.RXFIFORESET = 1;
     } else {
-        RXAdata = RXAdata & 0x00FF;
+        RXAdata = RXAdata & 0x00FF; //the following takes input from Tera Term to control the robot
+        //we swithced to WASD because it felt more normal. the variables set to 1,2,3 make it go forward or turn
+        //by hitting any button not listed, the robot will stop
         numRXA ++;
         if (RXAdata == 'a') {
             turn = turn + 0.05;
@@ -612,10 +614,8 @@ __interrupt void RXAINT_recv_ready(void)
         } else if (RXAdata == '1') {
             Vref = 1;
         } else if (RXAdata == '2') {
-                  Vref = 1;
                   turn = 1;
         } else if (RXAdata == '3') {
-                        Vref = -1;
                         turn = -1;
         } else {
             turn = 0;

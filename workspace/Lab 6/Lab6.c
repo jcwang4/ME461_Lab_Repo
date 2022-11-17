@@ -104,7 +104,7 @@ float Yr_dot_1 = 0;
 void setEPWM2A(float);
 void setEPWM2B(float);
 
-//global variables we defined for the robot motors, servo motors, and the song length
+//global variables we defined for the robot motors
 int16_t updown = 1;
 float saturation_limit = 10.0; //motor will only go from -10 to 10
 float myeffort = 0.0;
@@ -130,7 +130,7 @@ int16_t spivalue1 = 0;
 int16_t spivalue2 = 0;
 int16_t spivalue3 = 0;
 
-//excercise 4 intializations
+//excercise 4 intializations from lab 5
 int16_t dummy= 0;
 int16_t accelXraw = 0;
 int16_t accelYraw = 0;
@@ -354,7 +354,7 @@ void main(void)
     // Configure CPU-Timer 0, 1, and 2 to interrupt every given period:
     // 200MHz CPU Freq,                       Period (in uSeconds)
     ConfigCpuTimer(&CpuTimer0, LAUNCHPAD_CPU_FREQUENCY, 20000); //set this to 20000 so the interrupt calls every 20 uS
-    ConfigCpuTimer(&CpuTimer1, LAUNCHPAD_CPU_FREQUENCY, 4000); //set to 4 ms to call every 4 ms
+    ConfigCpuTimer(&CpuTimer1, LAUNCHPAD_CPU_FREQUENCY, 4000); //set to 4000 to call every 4 ms
     ConfigCpuTimer(&CpuTimer2, LAUNCHPAD_CPU_FREQUENCY, 40000);
 
     // Enable CpuTimer Interrupt bit TIE
@@ -456,7 +456,7 @@ __interrupt void SWI_isr(void) {
 // cpu_timer0_isr - CPU Timer0 ISR
 __interrupt void cpu_timer0_isr(void)
 {
-    /* Excercise 3
+    /* Excercise 3 and 4 left over from Lab 5. Included for reference in final project
     if(updown == 1) //the global variable is initialized at 1 so the function will start here
     {
         pwm1 = pwm1 + 10;
@@ -487,7 +487,6 @@ __interrupt void cpu_timer0_isr(void)
     SpibRegs.SPITXBUF = 0x00DA; // start command
     SpibRegs.SPITXBUF = pwm1; // pwm1 defined above
     SpibRegs.SPITXBUF = pwm2; // pwm2 defined above
-     */
 
     //Beginning of Excercise 4
     //Code inside CPU Timer 0
@@ -501,6 +500,7 @@ __interrupt void cpu_timer0_isr(void)
     SpibRegs.SPITXBUF = 0; //transmits gryo x
     SpibRegs.SPITXBUF = 0; //transmits gryo y
     SpibRegs.SPITXBUF = 0; //transmits gyro z
+   */
 
     CpuTimer0.InterruptCount++;
 
@@ -528,35 +528,35 @@ __interrupt void cpu_timer0_isr(void)
 // cpu_timer1_isr - CPU Timer1 ISR
 __interrupt void cpu_timer1_isr(void)
 {
-    leftwheel = readEncLeft();
+    leftwheel = readEncLeft(); //takes the encoder readings
     rightwheel = readEncRight();
-    leftwheelft = leftwheel/5.02;
+    leftwheelft = leftwheel/5.02; //by pushing the robot along a foot, we can figure out how to change the encoder in radians to feet
     rightwheelft = rightwheel/5.02;
 
-    PosLeft_K = leftwheelft;
+    PosLeft_K = leftwheelft; //this is redudant but mad more sense for us to read to create velocity
     PosRight_K = rightwheelft;
-    VelLeft_K = (PosLeft_K-PosLeft_K_1)/0.004;
+    VelLeft_K = (PosLeft_K-PosLeft_K_1)/0.004; //velocity calls the previous state and then takes the difference to create delta(position)/delta(time)
     VelRight_K = (PosRight_K-PosRight_K_1)/0.004;
 
-    phi = (RWH/WR)*(rightwheel-leftwheel);
-    theta_avg = 0.5*(rightwheel+leftwheel);
-    AngVelLeft_K = (leftwheel - leftwheel_K_1)/0.004;
+    phi = (RWH/WR)*(rightwheel-leftwheel); //given formula for bearing
+    theta_avg = 0.5*(rightwheel+leftwheel); //given formula for theta
+    AngVelLeft_K = (leftwheel - leftwheel_K_1)/0.004; // similiar to VelLeft_K, where it takes the difference in angular position and divides by time for angular velocity
     AngVelRight_K = (rightwheel - rightwheel_K_1)/0.004;
-    theta_dot_avg = 0.5*(AngVelLeft_K + AngVelRight_K);
-    Xr_dot = RWH*theta_dot_avg*(cos(phi));
+    theta_dot_avg = 0.5*(AngVelLeft_K + AngVelRight_K); //by taking the sum and dividing we can get the average
+    Xr_dot = RWH*theta_dot_avg*(cos(phi)); //this is the robot x velocity, found by using theta and phi
     Yr_dot = RWH*theta_dot_avg*(sin(phi));
-    Xr = Xr_1+ 0.004*((Xr_dot + Xr_dot_1)/2);
+    Xr = Xr_1+ 0.004*((Xr_dot + Xr_dot_1)/2); //then by integrating using trapezoid rule we can find the x position
     Yr = Yr_1 + 0.004*((Yr_dot + Yr_dot_1)/2);
 
-    eturn = turn + (VelLeft_K - VelRight_K);
+    eturn = turn + (VelLeft_K - VelRight_K); //the difference between wheel speed causes a turn
 
-    ek_left = Vref - VelLeft_K - kpturn*eturn;
+    ek_left = Vref - VelLeft_K - kpturn*eturn; //this is the error term with the turn variable added. This is a part of the control
     ek_right = Vref - VelRight_K + kpturn*eturn;
 
-    IK_left = IK_left_1 + 0.004*((ek_left+ek_left_1)/2);
+    IK_left = IK_left_1 + 0.004*((ek_left+ek_left_1)/2); //this is the integral of error, which is the other part of the control
     IK_right = IK_right_1 + 0.004*((ek_right+ek_right_1)/2);
 
-    uleft = (kp*ek_left)+(ki*IK_left);
+    uleft = (kp*ek_left)+(ki*IK_left); //the PI control, where Kp and Ki can be changed to provide a better control system for the robot
     uright = (kp*ek_right)+(ki*IK_right);
 
     setEPWM2B(-uleft); //these two functions then set the EPWM signal to be equal to the myeffort function, which will then use the scaling function below
@@ -572,8 +572,8 @@ __interrupt void cpu_timer1_isr(void)
         IK_right = IK_right_1;
     }
 
-    PosLeft_K_1 = PosLeft_K;
-    PosRight_K_1 = PosRight_K;
+    PosLeft_K_1 = PosLeft_K; //all of this saves past states so that a new value can be made and the compared to the past state
+    PosRight_K_1 = PosRight_K; //it is important to set it K_1 = K, otherwise the states would never change
     leftwheel_K_1 = leftwheel;
     rightwheel_K_1 = rightwheel;
     ek_left_1 = ek_left;
@@ -656,7 +656,7 @@ float readEncLeft(void)
     // 100 slits in the encoder disk so 100 square waves per one revolution of the
     // DC motor's back shaft. Then Quadrature Decoder mode multiplies this by 4 so 400 counts per one rev
     // of the DC motor's back shaft. Then the gear motor's gear ratio is 30:1.
-    return (raw*((-2*PI)/12000));
+    return (raw*((-2*PI)/12000)); //this takes the encoder data and turns it into radians
 }
 
 float readEncRight(void)
@@ -668,12 +668,12 @@ float readEncRight(void)
     // 100 slits in the encoder disk so 100 square waves per one revolution of the
     // DC motor's back shaft. Then Quadrature Decoder mode multiplies this by 4 so 400 counts per one rev
     // of the DC motor's back shaft. Then the gear motor's gear ratio is 30:1.
-    return (raw*((2*PI)/12000));
+    return (raw*((2*PI)/12000)); //this takes the encoder data and turns it into radians
 }
 
 __interrupt void SPIB_isr(void)
 {
-    /* Exercise 3
+    /* Exercise 3 and 4 left over from lab 5 incase we want to reference in final project
     spivalue1 = SpibRegs.SPIRXBUF; // Read first 16 bit value off RX FIFO. Probably is zero since no chip
     spivalue2 = SpibRegs.SPIRXBUF; // Read second 16 bit value off RX FIFO. Again probably zero
     spivalue3 = SpibRegs.SPIRXBUF;
@@ -682,7 +682,6 @@ __interrupt void SPIB_isr(void)
 
     volt_spivalue2 = spivalue2*(3.3/4095.0); // Here covert ADCIND0 to volts
     volt_spivalue3 = spivalue3*(3.3/4095.0); // Here covert ADCIND0 to volts
-     */
 
     // Code inside SPIB Interrupt Service Routine
 
@@ -711,11 +710,12 @@ __interrupt void SPIB_isr(void)
     SpibRegs.SPIFFRX.bit.RXFFOVFCLR = 1; // Clear Overflow flag just in case of an overflow
     SpibRegs.SPIFFRX.bit.RXFFINTCLR = 1; // Clear RX FIFO Interrupt flag so next interrupt will happen
     PieCtrlRegs.PIEACK.all = PIEACK_GROUP6; // Acknowledge INT6 PIE interrupt
+    */
 }
 
-void setupSpib(void)
+void setupSpib(void) //this whole function is not used in lab 6
 {
-    int16_t temp = 0;
+    int16_t temp = 0; //can use this a dummy variable
 
     //Step 1 copies initiliazations and brings them into the setup
     GPIO_SetupPinMux(9, GPIO_MUX_CPU1, 0); // Set as GPIO9 and used as DAN28027 SS
@@ -916,7 +916,7 @@ void setupSpib(void)
     SpibRegs.SPIFFRX.bit.RXFFINTCLR=1; // Clear Interrupt flag
     PieCtrlRegs.PIEACK.all = PIEACK_GROUP6;
 }
-void setEPWM2A(float controleffort)
+void setEPWM2A(float controleffort) //copied from lab 3, this sets the control effort for the EPWM so that it doesn't saturate
 {
 
     if(controleffort >= saturation_limit) //the saturation limit will be the maximum, so if input exceeds the limit it will return the saturation limit
@@ -931,7 +931,7 @@ void setEPWM2A(float controleffort)
     //2500 is defined by TBPRD
 }
 
-void setEPWM2B(float controleffort)
+void setEPWM2B(float controleffort) //copied from lab 3, this sets the control effort for the EPWM so that it doesn't saturate
 {
 
     if(controleffort>saturation_limit) //the saturation limit will be the maximum, so if input exceeds the limit it will return the saturation limit
