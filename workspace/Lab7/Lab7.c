@@ -69,7 +69,7 @@ float accelz_offset = 0;
 float gyrox_offset = 0;
 float gyroy_offset = 0;
 float gyroz_offset = 0;
-float accelzBalancePoint = -.76;
+float accelzBalancePoint = -0.615;
 int16 IMU_data[9];
 uint16_t temp=0;
 int16_t doneCal = 0;
@@ -545,26 +545,27 @@ __interrupt void SWI_isr(void) {
     //turn start
     WheelDif = LeftWheel-RightWheel;
     vel_WheelDif = 0.333*vel_WheelDif_k1 +166.667*WheelDif -166.667*WheelDif_k1;
+    turnref = turnref_k1 + 0.004*((turnrate+turnrate_k1)/2); //this is the integral of error, which is the other part of the control
     errorDif = turnref-WheelDif;
     IK_turn = IK_turn_k1 + 0.004*((errorDif+errorDif_k1)/2); //this is the integral of error, which is the other part of the control
     turn = Kp*errorDif+Ki*IK_turn-Kd*vel_WheelDif;
-    turnrate = turnrate_k1 + 0.004*((turnref+turnref_k1)/2); //this is the integral of error, which is the other part of the control
-    ut_Right = ubal/2.0 -turnrate+FwdBackOffset;
-    ut_Left = ubal/2.0 +turnrate+FwdBackOffset;
 
     if (fabs(turn) > 3) //if uleft control effort is greater than 10, it will stop IK from increasing any higher. This will minimize the integral windup
     {
         IK_turn = IK_turn_k1;
     }
 
-    if(turn_controleffort >= turn_saturation_limit) //the saturation limit will be the maximum, so if input exceeds the limit it will return the saturation limit
+    if(turn >= 4) //the saturation limit will be the maximum, so if input exceeds the limit it will return the saturation limit
     {
-        turn_controleffort = 4;
+        turn = 4;
     }
-    else if(turn_controleffort <= (-turn_saturation_limit)) //the same is true for the bottom of the saturation limit
+    else if(turn <= -4) //the same is true for the bottom of the saturation limit
     {
-        turn_controleffort = -4;
+        turn = -4;
     }
+
+    ut_Right = ubal/2.0 -turn+FwdBackOffset;
+    ut_Left = ubal/2.0 +turn+FwdBackOffset;
 
     setEPWM2B(-ut_Left); //these two functions then set the EPWM signal to be equal to the myeffort function, which will then use the scaling function below
     setEPWM2A(ut_Right);
