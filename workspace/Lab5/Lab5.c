@@ -494,9 +494,6 @@ __interrupt void SPIB_isr(void)
     SpibRegs.SPIFFRX.bit.RXFFINTCLR=1; // Clear Interrupt flag
     PieCtrlRegs.PIEACK.all = PIEACK_GROUP6;
 
-    SpibRegs.SPIFFRX.bit.RXFFOVFCLR = 1; // Clear Overflow flag just in case of an overflow
-    SpibRegs.SPIFFRX.bit.RXFFINTCLR = 1; // Clear RX FIFO Interrupt flag so next interrupt will happen
-    PieCtrlRegs.PIEACK.all = PIEACK_GROUP6; // Acknowledge INT6 PIE interrupt
 }
 
 void setupSpib(void)

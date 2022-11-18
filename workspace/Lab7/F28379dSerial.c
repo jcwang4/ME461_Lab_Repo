@@ -579,13 +579,16 @@ __interrupt void TXDINT_data_sent(void)
 }
 
 //for SerialA
+// This function is called each time a char is received over UARTA.
+//for SerialA
 #ifdef _FLASH
 #pragma CODE_SECTION(RXAINT_recv_ready, ".TI.ramfunc");
 #endif
+extern float turnrate;
+extern float FwdBackOffset;
 __interrupt void RXAINT_recv_ready(void)
 {
     RXAdata = SciaRegs.SCIRXBUF.all;
-
     /* SCI PE or FE error */
     if (RXAdata & 0xC000) {
         SciaRegs.SCICTL1.bit.SWRESET = 0;
@@ -594,10 +597,20 @@ __interrupt void RXAINT_recv_ready(void)
         SciaRegs.SCIFFRX.bit.RXFIFORESET = 1;
     } else {
         RXAdata = RXAdata & 0x00FF;
-
         numRXA ++;
+        if (RXAdata == 'a') {
+            turnrate = turnrate - 0.2;
+        } else if (RXAdata == 'd') {
+            turnrate = turnrate + 0.2;
+        } else if (RXAdata == 'w') {
+            FwdBackOffset = FwdBackOffset - 0.2;
+        } else if (RXAdata == 's') {
+            FwdBackOffset = FwdBackOffset + 0.2;
+        } else {
+            turnrate = 0;
+            FwdBackOffset = 0;
+        }
     }
-
     SciaRegs.SCIFFRX.bit.RXFFINTCLR = 1;
     PieCtrlRegs.PIEACK.all = PIEACK_GROUP9;
 
