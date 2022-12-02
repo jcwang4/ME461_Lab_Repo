@@ -1,7 +1,7 @@
 //#############################################################################
 // FILE:   Lab7.c
 //
-// TITLE:  DC Motor Speed Control and Steering a Three Wheel Robot Car
+// TITLE:  Segbot Balancing
 //#############################################################################
 
 // Included Files
@@ -50,7 +50,7 @@ float volt_adca3 = 0.0;
 void setupSpib(void);
 void init_eQEPs(void);
 
-//Predefinition of Ecnoders
+//Predefinition of Encoders
 float readEncLeft(void);
 float readEncRight(void);
 
@@ -69,7 +69,7 @@ float accelz_offset = 0;
 float gyrox_offset = 0;
 float gyroy_offset = 0;
 float gyroz_offset = 0;
-float accelzBalancePoint = -0.615;
+float accelzBalancePoint = -0.615; //we adjusted this so that it could better find the balance point, accounting for battery weight
 int16 IMU_data[9];
 uint16_t temp=0;
 int16_t doneCal = 0;
@@ -81,7 +81,8 @@ float LeftWheel = 0;
 float RightWheel = 0;
 float LeftWheelArray[4] = {0,0,0,0};
 float RightWheelArray[4] = {0,0,0,0};
-// Kalman Filter vars
+
+// Kalman Filter variables
 float T = 0.001; //sample rate, 1ms
 float Q = 0.01; // made global to enable changing in runtime
 float R = 25000;//50000;
@@ -110,7 +111,7 @@ float gyrorate_dot_k1 = 0;
 float gyro_value_k1 = 0;
 float ubal = 0;
 
-//Excercise 4 Turn Variables
+//Exercise 4 Turn Variables
 float WheelDif = 0;
 float WheelDif_k1 = 0;
 float vel_WheelDif = 0;
@@ -138,10 +139,7 @@ void setEPWM2A(float);
 void setEPWM2B(float);
 
 //global variables we defined for the robot motors
-int16_t updown = 1;
 float saturation_limit = 10.0; //motor will only go from -10 to 10
-float myeffort = 0.0;
-int16_t updown_motor = 1;
 
 // Count variables
 uint32_t numTimer0calls = 0;
@@ -158,12 +156,12 @@ int16_t pwm2 = 0;
 float volt_spivalue2 = 0;
 float volt_spivalue3 = 0;
 
-//interrupt intializations
+//interrupt initializations
 int16_t spivalue1 = 0;
 int16_t spivalue2 = 0;
 int16_t spivalue3 = 0;
 
-//excercise 4 intializations from lab 5
+//Exercise 4 initializations from lab 5
 int16_t dummy= 0;
 int16_t accelXraw = 0;
 int16_t accelYraw = 0;
@@ -487,7 +485,7 @@ void main(void)
     GpioCtrlRegs.GPAPUD.bit.GPIO3 = 1; // For EPWM2B
     EDIS;
 
-    init_eQEPs();
+    init_eQEPs(); //Calling functions in main()
 
     setupSpib(); //Call this function in main() somewhere after the DINT; line of code.
 
@@ -520,6 +518,7 @@ void main(void)
     {
         if (UARTPrint == 1 ) {
             serial_printf(&SerialA, "Joystick 1 Volt: %f Joystick 2 Volt: %f Accel Z: %f Gyro X: %f leftwheel: %f rightwheel: %f\r\n", volt_adca2, volt_adca3, accelZreading, gyroXreading, leftwheel, rightwheel);
+            //prints our values to Tera Term to check them
             UARTPrint = 0;
         }
     }
@@ -536,21 +535,21 @@ __interrupt void SWI_isr(void) {
 
     // Insert SWI ISR Code here.......
 
-    thd_left_k = 0.6*thd_left_k1+100*LeftWheel-100*LeftWheel_k1;
-    thd_right_k = 0.6*thd_right_k1+100*RightWheel-100*RightWheel_k1;
-    gyrorate_dot = 0.6*gyrorate_dot_k1+100*gyro_value-100*gyro_value_k1;
+    thd_left_k = 0.6*thd_left_k1+100*LeftWheel-100*LeftWheel_k1; //uses past states of theta dot and left wheel to find the the angular velocity of left wheel
+    thd_right_k = 0.6*thd_right_k1+100*RightWheel-100*RightWheel_k1; //this is the given transfer function (100z-100)/(z-0.6)
+    gyrorate_dot = 0.6*gyrorate_dot_k1+100*gyro_value-100*gyro_value_k1; //uses past state of gyro rate dot and gyro value to find gryo rate dot
 
-    ubal = -K1*tilt_value-K2*gyro_value-K3*(thd_left_k+thd_right_k)/2-K4*gyrorate_dot;
+    ubal = -K1*tilt_value-K2*gyro_value-K3*(thd_left_k+thd_right_k)/2-K4*gyrorate_dot; //then ubal is the K value matrix multiplied by the tilt and gyro matrix
 
-    //turn start
-    WheelDif = LeftWheel-RightWheel;
-    vel_WheelDif = 0.333*vel_WheelDif_k1 +166.667*WheelDif -166.667*WheelDif_k1;
-    turnref = turnref_k1 + 0.004*((turnrate+turnrate_k1)/2); //this is the integral of error, which is the other part of the control
-    errorDif = turnref-WheelDif;
+    //Start of the code for Excercise 4, turn control
+    WheelDif = LeftWheel-RightWheel; //the difference between the wheels
+    vel_WheelDif = 0.333*vel_WheelDif_k1 +166.667*WheelDif -166.667*WheelDif_k1;//using a different trasnfer function we can find the velocity of the wheel difference
+    turnref = turnref_k1 + 0.004*((turnrate+turnrate_k1)/2); //this is the integral of turnrate, which then gives the turn ref
+    errorDif = turnref-WheelDif; //defining an error between the turn and the wheel
     IK_turn = IK_turn_k1 + 0.004*((errorDif+errorDif_k1)/2); //this is the integral of error, which is the other part of the control
-    turn = Kp*errorDif+Ki*IK_turn-Kd*vel_WheelDif;
+    turn = Kp*errorDif+Ki*IK_turn-Kd*vel_WheelDif; //PID control using the error, integral of error, and velocity
 
-    if (fabs(turn) > 3) //if uleft control effort is greater than 10, it will stop IK from increasing any higher. This will minimize the integral windup
+    if (fabs(turn) > 3) //if turn is greater than 3, it will stop IK from increasing any higher. This will minimize the integral windup
     {
         IK_turn = IK_turn_k1;
     }
@@ -563,13 +562,16 @@ __interrupt void SWI_isr(void) {
     {
         turn = -4;
     }
+    //the integral windup then minimizes the wheels from spinning rapidly to account for too much on the integral
+    //then the saturation also makes sure that the wheels won't turn too fast and cause the segbot to tip over
 
-    ut_Right = ubal/2.0 -turn+FwdBackOffset;
+    ut_Right = ubal/2.0 -turn+FwdBackOffset; //ut_right and ut_left account now for the balance, the turn, and the offset
     ut_Left = ubal/2.0 +turn+FwdBackOffset;
 
     setEPWM2B(-ut_Left); //these two functions then set the EPWM signal to be equal to the myeffort function, which will then use the scaling function below
     setEPWM2A(ut_Right);
 
+    //all the definitions of past states to be used in the tranfer functions and integrals
     thd_left_k1 = thd_left_k;
     thd_right_k1 = thd_right_k;
     gyrorate_dot_k1 = gyrorate_dot;
@@ -585,7 +587,6 @@ __interrupt void SWI_isr(void) {
 
     numSWIcalls++;
     DINT;
-
 }
 
 // cpu_timer0_isr - CPU Timer0 ISR
@@ -702,6 +703,7 @@ __interrupt void cpu_timer1_isr(void)
 // cpu_timer2_isr CPU Timer2 ISR
 __interrupt void cpu_timer2_isr(void)
 {
+    //commented this out so that we can see the blue light for the first 4 seconds of the robot starting up
     // Blink LaunchPad Blue LED
     //GpioDataRegs.GPATOGGLE.bit.GPIO31 = 1;
 
@@ -715,7 +717,7 @@ __interrupt void cpu_timer2_isr(void)
 
 __interrupt void ADCA_ISR(void)
 {
-
+    //all of the ADC functions that were used in past labs
     adca2result = AdcaResultRegs.ADCRESULT0; //using SOC0 to look at ADCAIN2
     adca3result = AdcaResultRegs.ADCRESULT1; //using SOC1 to look at ADCAIN3
 
@@ -786,6 +788,7 @@ void init_eQEPs(void)
 
 float readEncLeft(void)
 {
+    //left wheel encoder data from lab 6
     int32_t raw = 0;
     uint32_t QEP_maxvalue = 0xFFFFFFFFU; //4294967295U
     raw = EQep1Regs.QPOSCNT;
@@ -798,6 +801,7 @@ float readEncLeft(void)
 
 float readEncRight(void)
 {
+    //right wheel encoder data from lab 6
     int32_t raw = 0;
     uint32_t QEP_maxvalue = 0xFFFFFFFFU; //4294967295U -1 32bit signed int
     raw = EQep2Regs.QPOSCNT;
@@ -810,17 +814,7 @@ float readEncRight(void)
 
 __interrupt void SPIB_isr(void)
 {
-    /*Exercise 3
-    spivalue1 = SpibRegs.SPIRXBUF; // Read first 16 bit value off RX FIFO. Probably is zero since no chip
-    spivalue2 = SpibRegs.SPIRXBUF; // Read second 16 bit value off RX FIFO. Again probably zero
-    spivalue3 = SpibRegs.SPIRXBUF;
-    //must read the register three times to get the bits off of the FIFO
-    GpioDataRegs.GPASET.bit.GPIO9 = 1; // Set GPIO9 high to end Slave Select.
-
-    volt_spivalue2 = spivalue2*(3.3/4095.0); // Here covert ADCIND0 to volts
-    volt_spivalue3 = spivalue3*(3.3/4095.0); // Here covert ADCIND0 to volts
-     */
-
+    //reads the MPU data. The dummy value allows us to skip the temp reading and pull only accel and gyro
     GpioDataRegs.GPCSET.bit.GPIO66 = 1;
     dummy = SpibRegs.SPIRXBUF;
     accelXraw = SpibRegs.SPIRXBUF;
@@ -831,6 +825,7 @@ __interrupt void SPIB_isr(void)
     gyroYraw = SpibRegs.SPIRXBUF;
     gyroZraw = SpibRegs.SPIRXBUF;
 
+    //converts the raw data from MPU to usable numbers
     accelXreading = accelXraw*4.0/32767.0;
     accelYreading = accelYraw*4.0/32767.0;
     accelZreading = accelZraw*4.0/32767.0;
@@ -840,6 +835,7 @@ __interrupt void SPIB_isr(void)
     gyroZreading = gyroZraw*250.0/32767.0;
 
     //Code to be copied into SPIB_ISR interrupt function after the IMU measurements have been collected.
+    //All the following code was given to us. It works through the initilizations at robot start up and the Kalman Filter
     if(calibration_state == 0)
     {
         calibration_count++;
@@ -930,7 +926,7 @@ __interrupt void SPIB_isr(void)
     PieCtrlRegs.PIEACK.all = PIEACK_GROUP6;
 }
 
-void setupSpib(void) //this whole function is not used in lab 6
+void setupSpib(void) //this whole function is used to define the SPIB
 {
     int16_t temp = 0; //can use this a dummy variable
 
@@ -1085,7 +1081,7 @@ void setupSpib(void) //this whole function is not used in lab 6
     GpioDataRegs.GPCSET.bit.GPIO66 = 1;
     temp = SpibRegs.SPIRXBUF;
     DELAY_US(10);
-
+    //to get better control could also tweak these values to better zero the MPU
     GpioDataRegs.GPCCLEAR.bit.GPIO66 = 1;
     SpibRegs.SPITXBUF = (0x7700 | 0x00EC); // 0x7700
     while(SpibRegs.SPIFFRX.bit.RXFFST !=1);

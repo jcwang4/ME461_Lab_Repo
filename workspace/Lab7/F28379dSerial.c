@@ -584,8 +584,8 @@ __interrupt void TXDINT_data_sent(void)
 #ifdef _FLASH
 #pragma CODE_SECTION(RXAINT_recv_ready, ".TI.ramfunc");
 #endif
-extern float turnrate;
-extern float FwdBackOffset;
+extern float turnrate; //have to pull these in from the main lab7.c file
+extern float FwdBackOffset; //can't redfine them, have to call them externally
 __interrupt void RXAINT_recv_ready(void)
 {
     RXAdata = SciaRegs.SCIRXBUF.all;
@@ -598,6 +598,7 @@ __interrupt void RXAINT_recv_ready(void)
     } else {
         RXAdata = RXAdata & 0x00FF;
         numRXA ++;
+        //WASD to control the robot back and forth
         if (RXAdata == 'a') {
             turnrate = turnrate - 0.2;
         } else if (RXAdata == 'd') {
@@ -607,6 +608,7 @@ __interrupt void RXAINT_recv_ready(void)
         } else if (RXAdata == 's') {
             FwdBackOffset = FwdBackOffset + 0.2;
         } else {
+            //this allows for turns and movement to stop for the segbot to re stabalize
             turnrate = 0;
             FwdBackOffset = 0;
         }
