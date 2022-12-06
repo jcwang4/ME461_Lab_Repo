@@ -18,10 +18,12 @@
 #include <f28027Serial.h>
 #include <F2802x_Sci.h>
 
+extern float roll_tiltrate;
+extern float pitch_tiltrate;
 
 serial_t SerialA;
 
-uint16_t init_serial(serial_t *s, uint32_t baud, void (*got_func)(serial_t *s, char data))
+uint16_t init_serial(serial_t *s, uint32_t baud)
 {
     volatile struct SCI_REGS *sci;
     uint32_t clk;
@@ -36,7 +38,6 @@ uint16_t init_serial(serial_t *s, uint32_t baud, void (*got_func)(serial_t *s, c
     }
 
     s->sci = sci;
-    s->got_data = got_func;
 
     init_buffer(&s->TX);
 
@@ -163,33 +164,103 @@ __interrupt void TXAINT_data_sent(void)
 }
 
 
-/***************************************************************************
- * RXxINT_RECV_READY()
- *
- * Executed when data is received.
- ***************************************************************************/
 
-static inline void serial_recv_ready(serial_t *s)
-{
-    char data = s->sci->SCIRXBUF.all;
 
-    /* SCI PE or FE error */
-    if (data & 0xC000) {
-        s->sci->SCICTL1.bit.SWRESET = 0;
-        s->sci->SCICTL1.bit.SWRESET = 1;
-        s->sci->SCIFFRX.bit.RXFIFORESET = 0;
-        s->sci->SCIFFRX.bit.RXFIFORESET = 1;
-    } else if (s->got_data) {
-        s->got_data(s, data & 0x00FF);
-    }
-}
+float pinkx = 0;
+float pinky = 0;
+float bluex = 0;
+float bluey = 0;
+
+//for serial com with pi
+typedef union {
+    uint16_t parts[2];
+    float value;
+} float_int;
+
+uint16_t com_state = 0;
+char send_sci[40]; //send the float
+float_int to_send[10];
+uint16_t received_count = 0;
+uint16_t opti_count = 0;
+float_int received_pi[10];
+char temp_MSB = 0;
+
+
+char RXAdata = 0;
+int32_t numRXA = 0;
+int32_t inRXA = 0;
 
 #ifdef _FLASH
 #pragma CODE_SECTION(RXAINT_recv_ready, "ramfuncs");
 #endif
 __interrupt void RXAINT_recv_ready(void)
 {
-    serial_recv_ready(&SerialA);
+    RXAdata = SciaRegs.SCIRXBUF.all;
+    inRXA++;
+    /* SCI PE or FE error */
+    if (RXAdata & 0xC000) {
+        SciaRegs.SCICTL1.bit.SWRESET = 0;
+        SciaRegs.SCICTL1.bit.SWRESET = 1;
+        SciaRegs.SCIFFRX.bit.RXFIFORESET = 0;
+        SciaRegs.SCIFFRX.bit.RXFIFORESET = 1;
+    } else {
+        numRXA++;
+        RXAdata = RXAdata & 0x00FF;
+
+        if (com_state == 0) { //wait for data from pi
+            if (RXAdata == '*'){
+                com_state = 1;//pre echo state
+            } else if (RXAdata == '!'){
+                com_state = 2;//pre sending state
+            } else {
+                com_state = 0;
+            }
+        } else if (com_state == 1) {
+            if (RXAdata == '*') {
+                com_state = 10;//echo state
+            } else {
+                com_state = 0;
+            }
+        } else if (com_state == 10) { //echo state
+            if (received_count % 2 == 0) {
+                temp_MSB = RXAdata;
+            } else {
+                received_pi[received_count/4].parts[(received_count%4)/2] = ((RXAdata << 8) | temp_MSB) & 0xFFFF;
+            }
+            received_count += 1;
+            if (received_count == 16){
+                com_state = 0;
+                received_count = 0;
+                pinkx = received_pi[0].value;
+                pinky = received_pi[1].value;
+                bluex = received_pi[2].value;
+                bluey = received_pi[3].value;
+            }
+        } else if (com_state == 2) {
+            if (RXAdata == '!') {
+                int i = 0;
+//                for (i = 0; i < 2; i++) {
+//                    to_send[i].value = 0.1234+0.1*i;
+//                }
+                to_send[0].value = pitch_tiltrate;
+                to_send[1].value = roll_tiltrate;
+
+                for (i = 0; i < 2; i++) {
+                    send_sci[4*i] = to_send[i].parts[0] & 0xFF;
+                    send_sci[4*i+1] = (to_send[i].parts[0]>>8) & 0xFF;
+                    send_sci[4*i+2] = to_send[i].parts[1] & 0xFF;
+                    send_sci[4*i+3] = (to_send[i].parts[1]>>8) & 0xFF;
+                }
+                serial_send(&SerialA, send_sci, 8);
+                com_state = 0;
+            } else {
+                com_state = 0;
+            }
+        }
+
+    }
+
+
     SciaRegs.SCIFFRX.bit.RXFFINTCLR = 1;
     PieCtrlRegs.PIEACK.all = PIEACK_GROUP9;
 }

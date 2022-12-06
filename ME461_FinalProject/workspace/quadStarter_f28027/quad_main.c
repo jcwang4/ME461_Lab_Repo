@@ -30,10 +30,13 @@ __interrupt void cpu_timer0_isr(void);
 __interrupt void cpu_timer1_isr(void);
 __interrupt void cpu_timer2_isr(void);
 __interrupt void SPI_RXint(void);
+__interrupt void SWI_isr(void);
 
 void setupSpia(void);        //for mpu9250
-void serialRXA(serial_t *s, char data);
+//void serialRXA(serial_t *s, char data);
 
+
+int32_t numSWIcalls = 0;
 uint16_t temp=0;
 uint16_t XG_OFFSET_H        = 0x1300;
 uint16_t XG_OFFSET_L        = 0x1400;
@@ -78,7 +81,6 @@ uint16_t YA_OFFSET_L        = 0x7B00;
 uint16_t ZA_OFFSET_H        = 0x7D00;
 uint16_t ZA_OFFSET_L        = 0x7E00;
 uint16_t UARTPrint = 0;
-uint16_t numRXA = 0;
 int16_t Timer0Count = 0;
 int16_t ADC0raw = 0;
 int16_t ADC2raw = 0;
@@ -226,6 +228,7 @@ void main(void)
     PieVectTable.SCIRXINTA = &RXAINT_recv_ready;
     PieVectTable.SCITXINTA = &TXAINT_data_sent;
     PieVectTable.SPIRXINTA = &SPI_RXint;
+    PieVectTable.rsvd12_8 = &SWI_isr;
     EDIS;      // This is needed to disable write to EALLOW protected registers
 
     //
@@ -256,7 +259,7 @@ void main(void)
     //
     // User specific code, enable interrupts
     //
-    init_serial(&SerialA,115200,serialRXA);
+    init_serial(&SerialA,115200);
 
     InitSpiGpio(); // Just Setup SPI pins
     setupSpia();
@@ -290,8 +293,6 @@ void main(void)
     EPwm4Regs.ETSEL.bit.SOCAEN = 1; //enable SOCA
     EPwm4Regs.TBCTL.bit.CTRMODE = 0; //unfreeze, and enter up count mode
 
-
-
     EALLOW;
     GpioCtrlRegs.GPAPUD.bit.GPIO0 = 1;    // Disable pull-up on GPIO0 (EPWM1A)
     GpioCtrlRegs.GPAMUX1.bit.GPIO0 = 1;   // Configure GPIO0 as EPWM1A
@@ -319,7 +320,6 @@ void main(void)
     EPwm1Regs.CMPA.half.CMPA = 0;
     EPwm1Regs.CMPB = 0;
 
-
     EPwm2Regs.TBCTL.bit.CTRMODE = 0;      //set epwm2 to upcount mode
     EPwm2Regs.TBCTL.bit.FREE_SOFT = 0x2;  //Free Run
     EPwm2Regs.TBCTL.bit.CLKDIV = 0;  // Divide by 16
@@ -333,14 +333,13 @@ void main(void)
     EPwm2Regs.CMPA.half.CMPA = 0;
     EPwm2Regs.CMPB = 0;
 
-
-
         //
     // Enable CPU int1 which is connected to CPU-Timer 0, CPU int13
     // which is connected to CPU-Timer 1, and CPU int 14, which is connected
     // to CPU-Timer 2:
     //
     IER |= M_INT1;
+    IER |= M_INT12;  // for SWI
     IER |= M_INT13;
     IER |= M_INT14;
     IER |= M_INT9;  // SCIA
@@ -352,6 +351,7 @@ void main(void)
     // Enable TINT0 in the PIE: Group 1 interrupt 7
     //
     PieCtrlRegs.PIEIER1.bit.INTx7 = 1;
+    PieCtrlRegs.PIEIER12.bit.INTx8  = 1;
 
     EALLOW;
     GpioCtrlRegs.GPBMUX1.bit.GPIO34 = 0;
@@ -360,7 +360,7 @@ void main(void)
     GpioCtrlRegs.GPBPUD.bit.GPIO34 = 1;
 
     GpioCtrlRegs.GPAPUD.bit.GPIO5 = 1;    // Disable pull-up on GPIO5 (EPWM3B)
-    GpioCtrlRegs.GPAMUX1.bit.GPIO5 = 0;   // Configure GPIO5 as EPWM3B
+    GpioCtrlRegs.GPAMUX1.bit.GPIO5 = 0;   // Configure GPIO5
     GpioCtrlRegs.GPADIR.bit.GPIO5 = 1;
     GpioDataRegs.GPACLEAR.bit.GPIO5 = 1;
     EDIS;
@@ -380,18 +380,157 @@ void main(void)
     {
         if (UARTPrint == 1 ) {
             //serial_printf(&SerialA,"A0=%d A2=%d\r\n",ADC0raw,ADC2raw);  //Compiled printf minimal so only %d %x %u %c and maybe %s
-//            serial_printf(&SerialA,"Ax=%d,Ay=%d,Az=%d,Gx=%d,Gy=%d,Gz=%d \r\n",AccelXraw,AccelYraw,AccelZraw,gyroXraw,gyroYraw,gyroZraw);
+            //            serial_printf(&SerialA,"Ax=%d,Ay=%d,Az=%d,Gx=%d,Gy=%d,Gz=%d \r\n",AccelXraw,AccelYraw,AccelZraw,gyroXraw,gyroYraw,gyroZraw);
 
-            serial_printf(&SerialA,"r : %.2f, r_dot: %.2f, p : %.2f, p_dot : %.2f, y : %.2f, y_dot : %.2f \r\n",roll_tilt, roll_tiltrate, pitch_tilt, pitch_tiltrate, yaw_tilt, yaw_tiltrate);
+            //           serial_printf(&SerialA,"r : %.2f, r_dot: %.2f, p : %.2f, p_dot : %.2f, y : %.2f, y_dot : %.2f \r\n",roll_tilt, roll_tiltrate, pitch_tilt, pitch_tiltrate, yaw_tilt, yaw_tiltrate);
             UARTPrint = 0;
         }
     }
+ }
+
+// SWI_isr,  Using this interrupt as a Software started interrupt
+__interrupt void SWI_isr(void) {
+
+    // These three lines of code allow SWI_isr, to be interrupted by other interrupt functions
+    // making it lower priority than all other Hardware interrupts.
+    PieCtrlRegs.PIEACK.all = PIEACK_GROUP12;
+    asm("       NOP");                    // Wait one cycle
+    EINT;                                 // Clear INTM to enable interrupts
+    GpioDataRegs.GPASET.bit.GPIO5 = 1;
+    accelx = AccelXraw*4.0/32767.0;
+    accely = AccelYraw*4.0/32767.0;
+    accelz = AccelZraw*4.0/32767.0;
+
+    gyrox  = gyroXraw*250.0/32767.0;
+    gyroy  = gyroYraw*250.0/32767.0;
+    gyroz  = gyroZraw*250.0/32767.0;
+
+
+    mx = mx - mx_offset;   //Add in the offset from calibration
+    my = my - my_offset;   //Add in the offset from calibration
+    mz = mz - mz_offset; //Add in the offset from calibration
+
+    //Use arctan to get compass angle if quadrotor flat
+    if(my < 0) {
+        compass_angle = 270.0-(((float)atan((mx/my)))*180.0/PI);
+    }
+    else if(my > 0) {
+        compass_angle = 90.0-(((float)atan((mx/my)))*180.0/PI);
+    }
+    else if((my == 0) && (mx < 0)) {
+        compass_angle = 180.0;
+    }
+    if((my == 0) && (mx > 0)) {
+        compass_angle = 0.0;
+    }
+    SPIenc_state = 99;  // no state
+
+    if(calibration_state == 0){
+        calibration_count++;
+
+        if (calibration_count == 400) {
+            calibration_state = 1;
+            calibration_count = 0;
+        }
+    } else if(calibration_state == 1){
+
+        accelx_offset+=accelx;
+        accely_offset+=accely;
+        accelz_offset+=accelz;
+
+        gyrox_offset+=gyrox;
+        gyroy_offset+=gyroy;
+        gyroz_offset+=gyroz;
+
+
+        calibration_count++;
+        if (calibration_count == 400) {
+            calibration_state = 2;
+            accelx_offset/=400.0;
+            accely_offset/=400.0;
+            accelz_offset/=400.0;
+            gyrox_offset/=400.0;
+            gyroy_offset/=400.0;
+            gyroz_offset/=400.0;
+            calibration_count = 0;
+        }
+
+    } else if(calibration_state == 2){
+        accelx = accelx - (accelx_offset);
+        accely = accely - (accely_offset);
+        accelz = accelz - (accelz_offset)+1;
+        print_accelx = accelx;
+        print_accely = accely;
+        print_accelz = accelz;
+        gyrox  = gyrox - gyrox_offset;
+        gyroy  = gyroy - gyroy_offset;
+        gyroz  = gyroz - gyroz_offset;
+        print_gyrox = gyrox;
+        print_gyroy = gyroy;
+        print_gyroz = gyroz;
+        //            mpu_roll = atan2(accely, accelz);
+        //            mpu_pitch = atan2(-accelx, sqrt(accely*accely + accelz*accelz) );
+
+        // This is the Working Madgwick Algorithm -Ramya
+        MadgwickAHRSupdateIMU(Quaternions, DotQuaternions, mdg_beta,
+                              (PI/180.0)*gyrox,
+                              (PI/180.0)*gyroy,
+                              (PI/180.0)*gyroz,
+                              accelx, accely, accelz);
+
+        q0 = Quaternions[0];
+        q1 = Quaternions[1];
+        q2 = Quaternions[2];
+        q3 = Quaternions[3];
+
+        R11 = 2.0*q0*q0 -1 + 2.0*q1*q1;
+        R21 = 2.0*(q1*q2 - q0*q3);
+        R31 = 2.0*(q1*q3 + q0*q2);
+        R32 = 2.0*(q2*q3 - q0*q1);
+        R33 = 2.0*q0*q0 -1 + 2.0*q3*q3;
+
+
+        //            Added - signs to angles
+        roll_tilt =-1* atan2( R32, R33 );
+        pitch_tilt = -1 * -atan( R31 / sqrt(1-R31*R31) );
+        yaw_tilt =-1 *  atan2( R21, R11 );
+
+        //Measurements from gyroscope
+        pitch_tiltrate = (gyroy*PI)/180.0; //z-axis: (gyroz*PI)/180.0; //y-axis: (gyroy*PI)/180.0; //x-axis: (gyrox*PI)/180.0; // rad/s
+        roll_tiltrate = (gyrox*PI)/180.0; //z-axis: (gyroz*PI)/180.0; //y-axis: (gyroy*PI)/180.0; //x-axis: (gyrox*PI)/180.0; // rad/s
+        yaw_tiltrate = (gyroz*PI)/180.0; //z-axis: (gyroz*PI)/180.0; //y-axis: (gyroy*PI)/180.0; //x-axis: (gyrox*PI)/180.0; // rad/s
+
+
+        //            FT = 50;
+        //            f1_x = FT * sin(pitch_tilt);
+        //            f1_y = -FT *
+
+        //                    Motor commands A1, B1, A2, B2
+
+
+
+        //            k_F = 0;
+        //            k_M = 0;
+        //            length rotor to CoM (m)
+        //            l = 0.0916
+
+        EPwm1Regs.CMPA.half.CMPA = A1;
+        EPwm1Regs.CMPB = B1;
+        EPwm2Regs.CMPA.half.CMPA = A2;
+        EPwm2Regs.CMPB = B2;
+    }
+
+    numSWIcalls++;
+
+    GpioDataRegs.GPACLEAR.bit.GPIO5 = 1;
+    DINT;
+
 }
 
 __interrupt void adc_isr(void)
 {
 
-    GpioDataRegs.GPASET.bit.GPIO5 = 1;
+//    GpioDataRegs.GPASET.bit.GPIO5 = 1;
     ADC0raw = AdcResult.ADCRESULT0;
     ADC2raw = AdcResult.ADCRESULT1;
 
@@ -479,14 +618,14 @@ __interrupt void cpu_timer2_isr(void)
     EDIS;
 }
 
-// This function is called each time a char is recieved over UARTA.
-void serialRXA(serial_t *s, char data) {
-    numRXA ++;
-
-}
+//// This function is called each time a char is recieved over UARTA.
+//void serialRXA(serial_t *s, char data) {
+//    numRXA ++;
+//
+//}
 
 void SPI_RXint(void) {
-//    GpioDataRegs.GPASET.bit.GPIO5 = 1;
+
     uint16_t i;
 
     switch (SPIenc_state) {
@@ -498,10 +637,6 @@ void SPI_RXint(void) {
         AccelXraw = readdata[1];
         AccelYraw = readdata[2];
         AccelZraw = readdata[3];
-        accelx = AccelXraw*4.0/32767.0;
-        accely = AccelYraw*4.0/32767.0;
-        accelz = AccelZraw*4.0/32767.0;
-
 
         SpiaRegs.SPIFFRX.bit.RXFFIL = 4;
         GpioDataRegs.GPACLEAR.bit.GPIO19 = 1;
@@ -520,9 +655,6 @@ void SPI_RXint(void) {
         gyroXraw = readdata[1];
         gyroYraw = readdata[2];
         gyroZraw = readdata[3];
-        gyrox  = gyroXraw*250.0/32767.0;
-        gyroy  = gyroYraw*250.0/32767.0;
-        gyroz  = gyroZraw*250.0/32767.0;
 
         SpiaRegs.SPIFFRX.bit.RXFFIL = 4;
         GpioDataRegs.GPACLEAR.bit.GPIO19 = 1;
@@ -544,122 +676,8 @@ void SPI_RXint(void) {
         my = (float)readdata[2];
         mz = (float)readdata[3];
 
-        mx = mx - mx_offset;   //Add in the offset from calibration
-        my = my - my_offset;   //Add in the offset from calibration
-        mz = mz - mz_offset; //Add in the offset from calibration
-
-        //Use arctan to get compass angle if quadrotor flat
-        if(my < 0) {
-            compass_angle = 270.0-(((float)atan((mx/my)))*180.0/PI);
-        }
-        else if(my > 0) {
-            compass_angle = 90.0-(((float)atan((mx/my)))*180.0/PI);
-        }
-        else if((my == 0) && (mx < 0)) {
-            compass_angle = 180.0;
-        }
-        if((my == 0) && (mx > 0)) {
-            compass_angle = 0.0;
-        }
-        SPIenc_state = 99;  // no state
-
-        if(calibration_state == 0){
-            calibration_count++;
-
-            if (calibration_count == 400) {
-                calibration_state = 1;
-                calibration_count = 0;
-            }
-        } else if(calibration_state == 1){
-
-            accelx_offset+=accelx;
-            accely_offset+=accely;
-            accelz_offset+=accelz;
-
-            gyrox_offset+=gyrox;
-            gyroy_offset+=gyroy;
-            gyroz_offset+=gyroz;
-
-
-            calibration_count++;
-            if (calibration_count == 400) {
-                calibration_state = 2;
-                accelx_offset/=400.0;
-                accely_offset/=400.0;
-                accelz_offset/=400.0;
-                gyrox_offset/=400.0;
-                gyroy_offset/=400.0;
-                gyroz_offset/=400.0;
-                calibration_count = 0;
-            }
-
-        } else if(calibration_state == 2){
-            accelx = accelx - (accelx_offset);
-            accely = accely - (accely_offset);
-            accelz = accelz - (accelz_offset)+1;
-            print_accelx = accelx;
-            print_accely = accely;
-            print_accelz = accelz;
-            gyrox  = gyrox - gyrox_offset;
-            gyroy  = gyroy - gyroy_offset;
-            gyroz  = gyroz - gyroz_offset;
-            print_gyrox = gyrox;
-            print_gyroy = gyroy;
-            print_gyroz = gyroz;
-//            mpu_roll = atan2(accely, accelz);
-//            mpu_pitch = atan2(-accelx, sqrt(accely*accely + accelz*accelz) );
-
-            // This is the Working Madgwick Algorithm -Ramya
-            MadgwickAHRSupdateIMU(Quaternions, DotQuaternions, mdg_beta,
-                                  (PI/180.0)*gyrox,
-                                  (PI/180.0)*gyroy,
-                                  (PI/180.0)*gyroz,
-                                  accelx, accely, accelz);
-
-            q0 = Quaternions[0];
-            q1 = Quaternions[1];
-            q2 = Quaternions[2];
-            q3 = Quaternions[3];
-
-            R11 = 2.0*q0*q0 -1 + 2.0*q1*q1;
-            R21 = 2.0*(q1*q2 - q0*q3);
-            R31 = 2.0*(q1*q3 + q0*q2);
-            R32 = 2.0*(q2*q3 - q0*q1);
-            R33 = 2.0*q0*q0 -1 + 2.0*q3*q3;
-
-
-//            Added - signs to angles
-            roll_tilt =-1* atan2( R32, R33 );
-            pitch_tilt = -1 * -atan( R31 / sqrt(1-R31*R31) );
-            yaw_tilt =-1 *  atan2( R21, R11 );
-
-            //Measurements from gyroscope
-            pitch_tiltrate = (gyroy*PI)/180.0; //z-axis: (gyroz*PI)/180.0; //y-axis: (gyroy*PI)/180.0; //x-axis: (gyrox*PI)/180.0; // rad/s
-            roll_tiltrate = (gyrox*PI)/180.0; //z-axis: (gyroz*PI)/180.0; //y-axis: (gyroy*PI)/180.0; //x-axis: (gyrox*PI)/180.0; // rad/s
-            yaw_tiltrate = (gyroz*PI)/180.0; //z-axis: (gyroz*PI)/180.0; //y-axis: (gyroy*PI)/180.0; //x-axis: (gyrox*PI)/180.0; // rad/s
-
-
-//            FT = 50;
-//            f1_x = FT * sin(pitch_tilt);
-////            f1_y = -FT *
-//
-////                    Motor commands A1, B1, A2, B2
-//
-//
-//
-//            k_F = 0;
-//            k_M = 0;
-////            length rotor to CoM (m)
-//            l = 0.0916
-
-            EPwm1Regs.CMPA.half.CMPA = A1;
-            EPwm1Regs.CMPB = B1;
-            EPwm2Regs.CMPA.half.CMPA = A2;
-            EPwm2Regs.CMPB = B2;
-
-        }
         SPI_Interrupt_Finished = 1;
-        GpioDataRegs.GPACLEAR.bit.GPIO5 = 1;
+        PieCtrlRegs.PIEIFR12.bit.INTx8 = 1;
         break;
 
     }
