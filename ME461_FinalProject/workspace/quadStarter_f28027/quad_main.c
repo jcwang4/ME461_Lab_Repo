@@ -159,11 +159,28 @@ float pitch_tiltrate = 0;
 float roll_tiltrate = 0;
 float yaw_tiltrate = 0;
 
-float A1 = 0; //Top left propeller
-float A2 = 0; //Bottom left propeller
-float B1 = 0; //Top right propeller
-float B2 = 0; // Bottom right propeller
+int A1 = 0; //Top left propeller
+int A2 = 0; //Bottom left propeller
+int B1 = 0; //Top right propeller
+int B2 = 0; // Bottom right propeller
 
+float T_s = 0.005;
+float integralThetaError = 0;
+float integralThetaError_1 = 0;
+float tau_x = 0;
+float tau_y = 0;
+float tau_z = 0;
+float F_z = 0;
+float Kp_y = 25;
+float Ki_y = 0;
+float Kd_y = 0.25;
+//float thetaError = 0;
+//float thetaError_1 = 0;
+float w_y = 0;
+float theta_est;
+float theta_est_1;
+float theta_k;
+float theta_k_1;
 
 //
 // Main
@@ -383,6 +400,9 @@ void main(void)
             //            serial_printf(&SerialA,"Ax=%d,Ay=%d,Az=%d,Gx=%d,Gy=%d,Gz=%d \r\n",AccelXraw,AccelYraw,AccelZraw,gyroXraw,gyroYraw,gyroZraw);
 
             //           serial_printf(&SerialA,"r : %.2f, r_dot: %.2f, p : %.2f, p_dot : %.2f, y : %.2f, y_dot : %.2f \r\n",roll_tilt, roll_tiltrate, pitch_tilt, pitch_tiltrate, yaw_tilt, yaw_tiltrate);
+//            serial_printf(&SerialA,"p : %.2f, p_dot : %.2f tau_y : %.2f, A1 : %.3f, A2 : %.3f \r\n",pitch_tilt, pitch_tiltrate, tau_y, A1, A2);
+            serial_printf(&SerialA,"accely : %.2f, accel_x : %.2f theta_est : %.2f A1: %d A2: %d \r\n",accely, accelx, theta_est, A1, A2);
+
             UARTPrint = 0;
         }
     }
@@ -456,9 +476,9 @@ __interrupt void SWI_isr(void) {
         }
 
     } else if(calibration_state == 2){
-        accelx = accelx - (accelx_offset);
-        accely = accely - (accely_offset);
-        accelz = accelz - (accelz_offset)+1;
+//        accelx = accelx - (accelx_offset);
+//        accely = accely - (accely_offset);
+//        accelz = accelz - (accelz_offset)+1;
         print_accelx = accelx;
         print_accely = accely;
         print_accelz = accelz;
@@ -472,52 +492,126 @@ __interrupt void SWI_isr(void) {
         //            mpu_pitch = atan2(-accelx, sqrt(accely*accely + accelz*accelz) );
 
         // This is the Working Madgwick Algorithm -Ramya
-        MadgwickAHRSupdateIMU(Quaternions, DotQuaternions, mdg_beta,
-                              (PI/180.0)*gyrox,
-                              (PI/180.0)*gyroy,
-                              (PI/180.0)*gyroz,
-                              accelx, accely, accelz);
-
-        q0 = Quaternions[0];
-        q1 = Quaternions[1];
-        q2 = Quaternions[2];
-        q3 = Quaternions[3];
-
-        R11 = 2.0*q0*q0 -1 + 2.0*q1*q1;
-        R21 = 2.0*(q1*q2 - q0*q3);
-        R31 = 2.0*(q1*q3 + q0*q2);
-        R32 = 2.0*(q2*q3 - q0*q1);
-        R33 = 2.0*q0*q0 -1 + 2.0*q3*q3;
-
-
-        //            Added - signs to angles
-        roll_tilt =-1* atan2( R32, R33 );
-        pitch_tilt = -1 * -atan( R31 / sqrt(1-R31*R31) );
-        yaw_tilt =-1 *  atan2( R21, R11 );
+//        MadgwickAHRSupdateIMU(Quaternions, DotQuaternions, mdg_beta,
+//                              (PI/180.0)*gyrox,
+//                              (PI/180.0)*gyroy,
+//                              (PI/180.0)*gyroz,
+//                              accelx, accely, accelz);
+//
+//        q0 = Quaternions[0];
+//        q1 = Quaternions[1];
+//        q2 = Quaternions[2];
+//        q3 = Quaternions[3];
+//
+//        R11 = 2.0*q0*q0 -1 + 2.0*q1*q1;
+//        R21 = 2.0*(q1*q2 - q0*q3);
+//        R31 = 2.0*(q1*q3 + q0*q2);
+//        R32 = 2.0*(q2*q3 - q0*q1);
+//        R33 = 2.0*q0*q0 -1 + 2.0*q3*q3;
+//
+//
+//        //            Added - signs to angles
+//        roll_tilt =-1* atan2( R32, R33 );
+//        pitch_tilt = -1 * -atan( R31 / sqrt(1-R31*R31) );
+//        yaw_tilt =-1 *  atan2( R21, R11 );
 
         //Measurements from gyroscope
         pitch_tiltrate = (gyroy*PI)/180.0; //z-axis: (gyroz*PI)/180.0; //y-axis: (gyroy*PI)/180.0; //x-axis: (gyrox*PI)/180.0; // rad/s
         roll_tiltrate = (gyrox*PI)/180.0; //z-axis: (gyroz*PI)/180.0; //y-axis: (gyroy*PI)/180.0; //x-axis: (gyrox*PI)/180.0; // rad/s
         yaw_tiltrate = (gyroz*PI)/180.0; //z-axis: (gyroz*PI)/180.0; //y-axis: (gyroy*PI)/180.0; //x-axis: (gyrox*PI)/180.0; // rad/s
 
+//        FT = 50;
+//            f1_x = FT * sin(pitch_tilt);
+////            f1_y = -FT *
+//
+////                    Motor commands A1, B1, A2, B2
+//
+//
+//
+//            k_F = 0;
+//            k_M = 0;
+////            length rotor to CoM (m)
+//            l = 0.0916
 
-        //            FT = 50;
-        //            f1_x = FT * sin(pitch_tilt);
-        //            f1_y = -FT *
-
-        //                    Motor commands A1, B1, A2, B2
 
 
+        w_y = -pitch_tiltrate;
+//        thetaError = -pitch_tilt;
 
-        //            k_F = 0;
-        //            k_M = 0;
-        //            length rotor to CoM (m)
-        //            l = 0.0916
+        theta_k = theta_k_1 + w_y * T_s;
 
+//        When accelx = 1, theta = 1.57 (pi/2)
+        theta_est = 0.99*theta_k + 0.01 * accelx;
+
+
+        if((theta_est > PI / 2) || (theta_est < - PI / 2)){
+            integralThetaError = integralThetaError_1;
+        }
+        else{
+            integralThetaError = integralThetaError_1 + (theta_est + theta_est_1) / 2;
+
+
+        }
+
+
+        tau_x = 0;
+        tau_y = -Kp_y * (theta_est) -Kd_y * (w_y) - Ki_y * integralThetaError;
+        tau_z = 0;
+        F_z = 1500;
+
+        A1 = tau_y*670  + F_z;
+        A2 = -tau_y*670 + F_z;
+        B1 = F_z;
+        B2 = F_z;
+
+        if(A1 > 3000){
+            A1 = 3000;
+        }
+        else if(A1 <0){
+            A1 = 0;
+        }
+        if(B1 > 3000){
+            B1 = 3000;
+        }
+        else if(B1 <0){
+            B1 = 0;
+        }
+        if(A2 > 3000){
+            A2 = 3000;
+        }
+        else if(A2 <0){
+            A2 = 0;
+        }
+        if(A2 > 3000){
+            A2 = 3000;
+        }
+        else if(B2 <0){
+            B2 = 0;
+        }
+
+
+        A2 = 0;
+        B1 = 0;
+        B2 = 0;
         EPwm1Regs.CMPA.half.CMPA = A1;
         EPwm1Regs.CMPB = B1;
         EPwm2Regs.CMPA.half.CMPA = A2;
         EPwm2Regs.CMPB = B2;
+
+//        EPwm1Regs.CMPA.half.CMPA = 0;
+//        EPwm1Regs.CMPB = 0;
+//        EPwm2Regs.CMPA.half.CMPA = 0;
+//        EPwm2Regs.CMPB = 0;
+
+//        thetaError_1 = thetaError;
+        theta_est_1 = theta_est_1;
+        theta_k_1 = theta_k;
+        integralThetaError_1 = integralThetaError;
+
+//        EPwm1Regs.CMPA.half.CMPA = A1;
+//        EPwm1Regs.CMPB = B1;
+//        EPwm2Regs.CMPA.half.CMPA = A2;
+//        EPwm2Regs.CMPB = B2;
     }
 
     numSWIcalls++;
@@ -873,7 +967,7 @@ void setupSpia(void)        //for mpu9250
     DELAY_US(10);
 
     GpioDataRegs.GPACLEAR.bit.GPIO19 = 1;
-    SpiaRegs.SPITXBUF = (XA_OFFSET_H | 0x00EB); // 0x7700
+    SpiaRegs.SPITXBUF = (XA_OFFSET_H | 0x13); // 0x7700
     while(SpiaRegs.SPIFFRX.bit.RXFFST !=1);
     GpioDataRegs.GPASET.bit.GPIO19 = 1;
     temp = SpiaRegs.SPIRXBUF;
@@ -881,7 +975,7 @@ void setupSpia(void)        //for mpu9250
     DELAY_US(10);
 
     GpioDataRegs.GPACLEAR.bit.GPIO19 = 1;
-    SpiaRegs.SPITXBUF = (XA_OFFSET_L | 0x0012); // 0x7800
+    SpiaRegs.SPITXBUF = (XA_OFFSET_L | 0x22); // 0x7800
     while(SpiaRegs.SPIFFRX.bit.RXFFST !=1);
     GpioDataRegs.GPASET.bit.GPIO19 = 1;
     temp = SpiaRegs.SPIRXBUF;
@@ -889,7 +983,7 @@ void setupSpia(void)        //for mpu9250
     DELAY_US(10);
 
     GpioDataRegs.GPACLEAR.bit.GPIO19 = 1;
-    SpiaRegs.SPITXBUF = (YA_OFFSET_H | 0x0018); // 0x7A00
+    SpiaRegs.SPITXBUF = (YA_OFFSET_H | 0xE6); // 0x7A00
     while(SpiaRegs.SPIFFRX.bit.RXFFST !=1);
     GpioDataRegs.GPASET.bit.GPIO19 = 1;
     temp = SpiaRegs.SPIRXBUF;
@@ -897,7 +991,7 @@ void setupSpia(void)        //for mpu9250
     DELAY_US(10);
 
     GpioDataRegs.GPACLEAR.bit.GPIO19 = 1;
-    SpiaRegs.SPITXBUF = (YA_OFFSET_L | 0x0000); // 0x7B00
+    SpiaRegs.SPITXBUF = (YA_OFFSET_L | 0x18); // 0x7B00
     while(SpiaRegs.SPIFFRX.bit.RXFFST !=1);
     GpioDataRegs.GPASET.bit.GPIO19 = 1;
     temp = SpiaRegs.SPIRXBUF;
