@@ -74,10 +74,17 @@ uint16_t USER_CTRL          = 0x6A00;
 uint16_t PWR_MGMT_1         = 0x6B00;
 uint16_t WHO_AM_I           = 0x7500;
 
-uint16_t XA_OFFSET_H        = 0x7700;
-uint16_t XA_OFFSET_L        = 0x7800;
-uint16_t YA_OFFSET_H        = 0x7A00;
-uint16_t YA_OFFSET_L        = 0x7B00;
+
+//uint16_t XA_OFFSET_H        = 0x7700;
+//uint16_t XA_OFFSET_L        = 0x7800;
+//uint16_t YA_OFFSET_H        = 0x7A00;
+//uint16_t YA_OFFSET_L        = 0x7B00;
+
+uint16_t XA_OFFSET_H        = 0x13;
+uint16_t XA_OFFSET_L        = 0x12;
+uint16_t YA_OFFSET_H        = 0xE6;
+uint16_t YA_OFFSET_L        = 0x18;
+
 uint16_t ZA_OFFSET_H        = 0x7D00;
 uint16_t ZA_OFFSET_L        = 0x7E00;
 uint16_t UARTPrint = 0;
@@ -167,20 +174,48 @@ int B2 = 0; // Bottom right propeller
 float T_s = 0.005;
 float integralThetaError = 0;
 float integralThetaError_1 = 0;
+float integralPhiError = 0;
+float integralPhiError_1 = 0;
+
 float tau_x = 0;
 float tau_y = 0;
 float tau_z = 0;
 float F_z = 0;
+
+
 float Kp_y = 25;
 float Ki_y = 0;
 float Kd_y = 0.25;
+
+float Kp_x = 25;
+float Ki_x = 0;
+float Kd_x = 0.25;
+
+float Kp_z = 25;
+float Ki_z = 0;
+float Kd_z = 0.25;
+
+
+
 //float thetaError = 0;
 //float thetaError_1 = 0;
+float w_x = 0;
 float w_y = 0;
-float theta_est;
-float theta_est_1;
-float theta_k;
-float theta_k_1;
+float w_z = 0;
+
+float theta_est = 0;
+float theta_est_1 = 0;
+float theta_k = 0;
+float theta_k_1 = 0;
+
+float phi_est = 0;
+float phi_est_1 = 0;
+float phi_k = 0;
+float phi_k_1 = 0;
+float psi_est = 0;
+float psi_est_1 = 0;
+float psi_k = 0;
+float psi_k_1 = 0;
 
 //
 // Main
@@ -401,7 +436,9 @@ void main(void)
 
             //           serial_printf(&SerialA,"r : %.2f, r_dot: %.2f, p : %.2f, p_dot : %.2f, y : %.2f, y_dot : %.2f \r\n",roll_tilt, roll_tiltrate, pitch_tilt, pitch_tiltrate, yaw_tilt, yaw_tiltrate);
 //            serial_printf(&SerialA,"p : %.2f, p_dot : %.2f tau_y : %.2f, A1 : %.3f, A2 : %.3f \r\n",pitch_tilt, pitch_tiltrate, tau_y, A1, A2);
-            serial_printf(&SerialA,"accely : %.2f, accel_x : %.2f theta_est : %.2f A1: %d A2: %d \r\n",accely, accelx, theta_est, A1, A2);
+//            serial_printf(&SerialA,"accely : %.2f, accel_x : %.2f theta_est theta_k : %.2f w_y : %.2f : %.2f A1: %d A2: %d \r\n",accely, accelx, theta_est, theta_k, w_y, A1, A2);
+//            serial_printf(&SerialA,"theta_est: %.2f phi_est: %.2f w_y: %.2f w_x: %.2f \r\n",theta_est, phi_est, w_y, w_x);
+            serial_printf(&SerialA,"accelx: %.2f accely: %.2f accelz: %.2f \r\n",accely, accelx, accelz);
 
             UARTPrint = 0;
         }
@@ -476,9 +513,9 @@ __interrupt void SWI_isr(void) {
         }
 
     } else if(calibration_state == 2){
-//        accelx = accelx - (accelx_offset);
-//        accely = accely - (accely_offset);
-//        accelz = accelz - (accelz_offset)+1;
+        accelx = accelx - (accelx_offset);
+        accely = accely - (accely_offset);
+        accelz = accelz - (accelz_offset)+1;
         print_accelx = accelx;
         print_accely = accely;
         print_accelz = accelz;
@@ -535,34 +572,56 @@ __interrupt void SWI_isr(void) {
 
 
 
+
+
+
         w_y = -pitch_tiltrate;
+        w_x = - roll_tiltrate;
+        w_z = yaw_tiltrate;
+
 //        thetaError = -pitch_tilt;
 
         theta_k = theta_k_1 + w_y * T_s;
+        phi_k = phi_k_1 + w_x * T_s;
+        psi_k = psi_k_1 + w_z * T_s;
 
 //        When accelx = 1, theta = 1.57 (pi/2)
-        theta_est = 0.99*theta_k + 0.01 * accelx;
-
+        theta_est = 0.9*(0.9*theta_k + 0.1* theta_k_1)+ 0.157 * accelx;
+        phi_est = 0.9*(0.9*phi_k + 0.1* phi_k_1)+ 0.157 * accely;
+        psi_est = 0.9*(0.9*psi_k + 0.1* psi_k_1);
 
         if((theta_est > PI / 2) || (theta_est < - PI / 2)){
             integralThetaError = integralThetaError_1;
         }
         else{
             integralThetaError = integralThetaError_1 + (theta_est + theta_est_1) / 2;
+        }
 
-
+        if((phi_est > PI / 2) || (phi_est < - PI / 2)){
+            integralPhiError = integralPhiError_1;
+        }
+        else{
+            integralPhiError = integralPhiError_1 + (phi_est + phi_est_1) / 2;
         }
 
 
-        tau_x = 0;
+        tau_x = -Kp_x * (phi_est) -Kd_x * (w_x) - Ki_x * integralPhiError;
         tau_y = -Kp_y * (theta_est) -Kd_y * (w_y) - Ki_y * integralThetaError;
-        tau_z = 0;
+        tau_z = -Kp_z * (psi_est) -Kd_z * (w_z);
         F_z = 1500;
 
-        A1 = tau_y*670  + F_z;
-        A2 = -tau_y*670 + F_z;
-        B1 = F_z;
-        B2 = F_z;
+        A1 = tau_y*65  + tau_z *20 + F_z;
+        A2 = -tau_y*65 + F_z + tau_z *20;
+        B1 = tau_x * 65 + F_z - tau_z *20;
+        B2 = -tau_x * 65 + F_z - tau_z *20;
+
+
+
+//        A1 = tau_z *40;
+//        A2 = tau_z *40;
+//        B1 = -tau_z *40;
+//        B2 = -tau_z *40;
+
 
         if(A1 > 3000){
             A1 = 3000;
@@ -585,18 +644,28 @@ __interrupt void SWI_isr(void) {
         if(A2 > 3000){
             A2 = 3000;
         }
-        else if(B2 <0){
+        if(B2 <0){
             B2 = 0;
         }
+        else if(B2 > 3000){
+            B2 = 3000;
+        }
 
+//        A1 = 0;
+//        A2 = 0;
+//        B1 = 0;
+//        B2 = 0;
+//        EPwm1Regs.CMPA.half.CMPA = A1;
+//        EPwm1Regs.CMPB = B1;
+//        EPwm2Regs.CMPA.half.CMPA = A2;
+//        EPwm2Regs.CMPB = B2;
 
-        A2 = 0;
-        B1 = 0;
-        B2 = 0;
         EPwm1Regs.CMPA.half.CMPA = A1;
+        EPwm2Regs.CMPB = A2;
+
         EPwm1Regs.CMPB = B1;
-        EPwm2Regs.CMPA.half.CMPA = A2;
-        EPwm2Regs.CMPB = B2;
+        EPwm2Regs.CMPA.half.CMPA = B2;
+
 
 //        EPwm1Regs.CMPA.half.CMPA = 0;
 //        EPwm1Regs.CMPB = 0;
@@ -604,9 +673,15 @@ __interrupt void SWI_isr(void) {
 //        EPwm2Regs.CMPB = 0;
 
 //        thetaError_1 = thetaError;
-        theta_est_1 = theta_est_1;
+        theta_est_1 = theta_est;
         theta_k_1 = theta_k;
-        integralThetaError_1 = integralThetaError;
+        phi_est_1 = phi_est;
+        phi_k_1 = phi_k;
+        psi_est_1 = psi_est;
+        psi_k_1 = psi_k;
+
+//        integralPhiError_1 = integralPhiError;
+//        integralThetaError_1 = integralThetaError;
 
 //        EPwm1Regs.CMPA.half.CMPA = A1;
 //        EPwm1Regs.CMPB = B1;
