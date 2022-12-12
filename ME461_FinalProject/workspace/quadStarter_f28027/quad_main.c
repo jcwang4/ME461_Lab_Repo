@@ -186,10 +186,12 @@ float F_z = 0;
 float Kp_y = 25;
 float Ki_y = 0;
 float Kd_y = 0.25;
+float K_dd_y = 0.0;
 
 float Kp_x = 25;
 float Ki_x = 0;
 float Kd_x = 0.25;
+float K_dd_x = 0.0;
 
 float Kp_z = 25;
 float Ki_z = 0;
@@ -217,11 +219,21 @@ float psi_est_1 = 0;
 float psi_k = 0;
 float psi_k_1 = 0;
 
+float w_y_dot = 0;
+float w_y_dot_1 = 0;
+float w_y_1 = 0;
+
+float w_x_dot = 0;
+float w_x_dot_1 = 0;
+float w_x_1 = 0;
+
+
 //
 // Main
 //
 void main(void)
- {
+
+{
     //
     // WARNING: Always ensure you call memcpy before running any functions from
     // RAM InitSysCtrl includes a call to a RAM based function and without a 
@@ -438,7 +450,18 @@ void main(void)
 //            serial_printf(&SerialA,"p : %.2f, p_dot : %.2f tau_y : %.2f, A1 : %.3f, A2 : %.3f \r\n",pitch_tilt, pitch_tiltrate, tau_y, A1, A2);
 //            serial_printf(&SerialA,"accely : %.2f, accel_x : %.2f theta_est theta_k : %.2f w_y : %.2f : %.2f A1: %d A2: %d \r\n",accely, accelx, theta_est, theta_k, w_y, A1, A2);
 //            serial_printf(&SerialA,"theta_est: %.2f phi_est: %.2f w_y: %.2f w_x: %.2f \r\n",theta_est, phi_est, w_y, w_x);
-            serial_printf(&SerialA,"accelx: %.2f accely: %.2f accelz: %.2f \r\n",accely, accelx, accelz);
+
+
+            roll_tilt =-1* atan2( R32, R33 );
+                   pitch_tilt = -1 * -atan( R31 / sqrt(1-R31*R31) );
+                   yaw_tilt =-1 *  atan2( R21, R11 );
+
+                   //Measurements from gyroscope
+                   pitch_tiltrate = (gyroy*PI)/180.0; //z-axis: (gyroz*PI)/180.0; //y-axis: (gyroy*PI)/180.0; //x-axis: (gyrox*PI)/180.0; // rad/s
+                   roll_tiltrate = (gyrox*PI)/180.0; //z-axis: (gyroz*PI)/180.0; //y-axis: (gyroy*PI)/180.0; //x-axis: (gyrox*PI)/180.0; // rad/s
+                   yaw_tiltrate = (gyroz*PI)/180.0; //z-axis: (gyroz*PI)/180.0; //y-axis: (gyroy*PI)/180.0; //x-axis: (gyrox*PI)/180.0; // rad/s
+
+            serial_printf(&SerialA,"r: %.2f rr: %.2f p: %.2f pr: %.2f y: %.2f yr: %.2f \r\n", roll_tilt,roll_tiltrate, pitch_tilt, pitch_tiltrate, yaw_tilt, yaw_tiltrate );
 
             UARTPrint = 0;
         }
@@ -463,23 +486,23 @@ __interrupt void SWI_isr(void) {
     gyroz  = gyroZraw*250.0/32767.0;
 
 
-    mx = mx - mx_offset;   //Add in the offset from calibration
-    my = my - my_offset;   //Add in the offset from calibration
-    mz = mz - mz_offset; //Add in the offset from calibration
+//    mx = mx - mx_offset;   //Add in the offset from calibration
+//    my = my - my_offset;   //Add in the offset from calibration
+//    mz = mz - mz_offset; //Add in the offset from calibration
 
     //Use arctan to get compass angle if quadrotor flat
-    if(my < 0) {
-        compass_angle = 270.0-(((float)atan((mx/my)))*180.0/PI);
-    }
-    else if(my > 0) {
-        compass_angle = 90.0-(((float)atan((mx/my)))*180.0/PI);
-    }
-    else if((my == 0) && (mx < 0)) {
-        compass_angle = 180.0;
-    }
-    if((my == 0) && (mx > 0)) {
-        compass_angle = 0.0;
-    }
+//    if(my < 0) {
+//        compass_angle = 270.0-(((float)atan((mx/my)))*180.0/PI);
+//    }
+//    else if(my > 0) {
+//        compass_angle = 90.0-(((float)atan((mx/my)))*180.0/PI);
+//    }
+//    else if((my == 0) && (mx < 0)) {
+//        compass_angle = 180.0;
+//    }
+//    if((my == 0) && (mx > 0)) {
+//        compass_angle = 0.0;
+//    }
     SPIenc_state = 99;  // no state
 
     if(calibration_state == 0){
@@ -525,37 +548,49 @@ __interrupt void SWI_isr(void) {
         print_gyrox = gyrox;
         print_gyroy = gyroy;
         print_gyroz = gyroz;
-        //            mpu_roll = atan2(accely, accelz);
-        //            mpu_pitch = atan2(-accelx, sqrt(accely*accely + accelz*accelz) );
+//        mpu_roll = atan2(accely, accelz);
+//        mpu_pitch = atan2(-accelx, sqrt(accely*accely + accelz*accelz) );
 
-        // This is the Working Madgwick Algorithm -Ramya
-//        MadgwickAHRSupdateIMU(Quaternions, DotQuaternions, mdg_beta,
-//                              (PI/180.0)*gyrox,
-//                              (PI/180.0)*gyroy,
-//                              (PI/180.0)*gyroz,
-//                              accelx, accely, accelz);
-//
-//        q0 = Quaternions[0];
-//        q1 = Quaternions[1];
-//        q2 = Quaternions[2];
-//        q3 = Quaternions[3];
-//
-//        R11 = 2.0*q0*q0 -1 + 2.0*q1*q1;
-//        R21 = 2.0*(q1*q2 - q0*q3);
-//        R31 = 2.0*(q1*q3 + q0*q2);
-//        R32 = 2.0*(q2*q3 - q0*q1);
-//        R33 = 2.0*q0*q0 -1 + 2.0*q3*q3;
-//
-//
-//        //            Added - signs to angles
-//        roll_tilt =-1* atan2( R32, R33 );
-//        pitch_tilt = -1 * -atan( R31 / sqrt(1-R31*R31) );
-//        yaw_tilt =-1 *  atan2( R21, R11 );
+//        This is the Working Madgwick Algorithm -Ramya
+        MadgwickAHRSupdateIMU(Quaternions, DotQuaternions, mdg_beta,
+                              (PI/180.0)*gyrox,
+                              (PI/180.0)*gyroy,
+                              (PI/180.0)*gyroz,
+                              accelx, accely, accelz);
+
+        q0 = Quaternions[0];
+        q1 = Quaternions[1];
+        q2 = Quaternions[2];
+        q3 = Quaternions[3];
+
+        R11 = 2.0*q0*q0 -1 + 2.0*q1*q1;
+        R21 = 2.0*(q1*q2 - q0*q3);
+        R31 = 2.0*(q1*q3 + q0*q2);
+        R32 = 2.0*(q2*q3 - q0*q1);
+        R33 = 2.0*q0*q0 -1 + 2.0*q3*q3;
+
+
+        //            Added - signs to angles
+        roll_tilt =-1* atan2( R32, R33 );
+        pitch_tilt = -1 * -atan( R31 / sqrt(1-R31*R31) );
+        yaw_tilt =-1 *  atan2( R21, R11 );
 
         //Measurements from gyroscope
         pitch_tiltrate = (gyroy*PI)/180.0; //z-axis: (gyroz*PI)/180.0; //y-axis: (gyroy*PI)/180.0; //x-axis: (gyrox*PI)/180.0; // rad/s
         roll_tiltrate = (gyrox*PI)/180.0; //z-axis: (gyroz*PI)/180.0; //y-axis: (gyroy*PI)/180.0; //x-axis: (gyrox*PI)/180.0; // rad/s
         yaw_tiltrate = (gyroz*PI)/180.0; //z-axis: (gyroz*PI)/180.0; //y-axis: (gyroy*PI)/180.0; //x-axis: (gyrox*PI)/180.0; // rad/s
+
+
+        theta_est = -pitch_tilt;
+        phi_est = -roll_tilt;
+        psi_est = yaw_tilt;
+
+        w_y = -pitch_tiltrate;
+        w_x = -roll_tiltrate;
+        w_z = yaw_tiltrate;
+
+        w_y_dot = 0.6* w_y_dot_1 + 80 * w_y - 80*w_y_1;
+        w_x_dot = 0.6* w_x_dot_1 + 80 * w_x - 80*w_x_1;
 
 //        FT = 50;
 //            f1_x = FT * sin(pitch_tilt);
@@ -574,46 +609,52 @@ __interrupt void SWI_isr(void) {
 
 
 
+//
+//        w_y = -pitch_tiltrate;
+//        w_x = - roll_tiltrate;
+//        w_z = yaw_tiltrate;
+//
+////        thetaError = -pitch_tilt;
+//
+//        theta_k = theta_k_1 + w_y * T_s;
+//        phi_k = phi_k_1 + w_x * T_s;
+//        psi_k = psi_k_1 + w_z * T_s;
+//
+////        When accelx = 1, theta = 1.57 (pi/2)
+////        theta_est = 0.9*(0.9*theta_k + 0.1* theta_k_1)+ 0.157 * accelx;
+////        phi_est = 0.9*(0.9*phi_k + 0.1* phi_k_1)+ 0.157 * accely;
+////        psi_est = 0.9*(0.9*psi_k + 0.1* psi_k_1);
+//
+//        theta_est = 0.999 * theta_k + .001 * accelx;
 
-        w_y = -pitch_tiltrate;
-        w_x = - roll_tiltrate;
-        w_z = yaw_tiltrate;
+//        if((theta_est > PI / 2) || (theta_est < - PI / 2)){
+//            integralThetaError = integralThetaError_1;
+//        }
+//        else{
+//            integralThetaError = integralThetaError_1 + (theta_est + theta_est_1) / 2;
+//        }
 
-//        thetaError = -pitch_tilt;
-
-        theta_k = theta_k_1 + w_y * T_s;
-        phi_k = phi_k_1 + w_x * T_s;
-        psi_k = psi_k_1 + w_z * T_s;
-
-//        When accelx = 1, theta = 1.57 (pi/2)
-        theta_est = 0.9*(0.9*theta_k + 0.1* theta_k_1)+ 0.157 * accelx;
-        phi_est = 0.9*(0.9*phi_k + 0.1* phi_k_1)+ 0.157 * accely;
-        psi_est = 0.9*(0.9*psi_k + 0.1* psi_k_1);
-
-        if((theta_est > PI / 2) || (theta_est < - PI / 2)){
-            integralThetaError = integralThetaError_1;
-        }
-        else{
-            integralThetaError = integralThetaError_1 + (theta_est + theta_est_1) / 2;
-        }
-
-        if((phi_est > PI / 2) || (phi_est < - PI / 2)){
-            integralPhiError = integralPhiError_1;
-        }
-        else{
-            integralPhiError = integralPhiError_1 + (phi_est + phi_est_1) / 2;
-        }
+//        if((phi_est > PI / 2) || (phi_est < - PI / 2)){
+//            integralPhiError = integralPhiError_1;
+//        }
+//        else{
+//            integralPhiError = integralPhiError_1 + (phi_est + phi_est_1) / 2;
+//        }
 
 
-        tau_x = -Kp_x * (phi_est) -Kd_x * (w_x) - Ki_x * integralPhiError;
-        tau_y = -Kp_y * (theta_est) -Kd_y * (w_y) - Ki_y * integralThetaError;
-        tau_z = -Kp_z * (psi_est) -Kd_z * (w_z);
+
+        integralPhiError = integralPhiError_1 + (phi_est + phi_est_1) / 2;
+
+        tau_x = -Kp_x * (phi_est) -Kd_x * (w_x) - K_dd_x - Ki_x * integralPhiError;
+        tau_y = -Kp_y * (theta_est) -Kd_y * (w_y) - K_dd_y * w_y_dot - Ki_y * integralThetaError;
+//        tau_z = -Kp_z * (psi_est) -Kd_z * (w_z);
         F_z = 1500;
 
         A1 = tau_y*65  + tau_z *20 + F_z;
         A2 = -tau_y*65 + F_z + tau_z *20;
         B1 = tau_x * 65 + F_z - tau_z *20;
         B2 = -tau_x * 65 + F_z - tau_z *20;
+
 
 
 
@@ -679,6 +720,11 @@ __interrupt void SWI_isr(void) {
         phi_k_1 = phi_k;
         psi_est_1 = psi_est;
         psi_k_1 = psi_k;
+
+        w_y_dot_1 = w_y_dot;
+        w_y_1 = w_y;
+        w_x_dot_1 = w_x_dot;
+        w_x_1 = w_x;
 
 //        integralPhiError_1 = integralPhiError;
 //        integralThetaError_1 = integralThetaError;
