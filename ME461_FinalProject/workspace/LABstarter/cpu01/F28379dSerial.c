@@ -49,7 +49,32 @@ uint16_t init_serialSCIA(serialSCIA_t *s, uint32_t baud)
         GPIO_SetupPinMux(42, GPIO_MUX_CPU1, 15);
         GPIO_SetupPinOptions(42, GPIO_OUTPUT, GPIO_PUSHPULL);
 
-    } else {
+    }  else if (s == &SerialB) {
+        sci = &ScibRegs;
+
+        GPIO_SetupPinMux(15, GPIO_MUX_CPU1, 2);
+        GPIO_SetupPinOptions(15, GPIO_INPUT, GPIO_PULLUP);
+        GPIO_SetupPinMux(14, GPIO_MUX_CPU1, 2);
+        GPIO_SetupPinOptions(14, GPIO_OUTPUT, GPIO_PUSHPULL);
+
+
+    } else if (s == &SerialC) {
+        sci = &ScicRegs;
+
+        GPIO_SetupPinMux(139, GPIO_MUX_CPU1, 6);
+        GPIO_SetupPinOptions(139, GPIO_INPUT, GPIO_PULLUP);
+        GPIO_SetupPinMux(56, GPIO_MUX_CPU1, 6);
+        GPIO_SetupPinOptions(56, GPIO_OUTPUT, GPIO_PUSHPULL);
+
+    } else if (s == &SerialD) {
+        sci = &ScidRegs;
+
+        GPIO_SetupPinMux(105, GPIO_MUX_CPU1, 6);
+        GPIO_SetupPinOptions(105, GPIO_INPUT, GPIO_PULLUP);
+        GPIO_SetupPinMux(104, GPIO_MUX_CPU1, 6);
+        GPIO_SetupPinOptions(104, GPIO_OUTPUT, GPIO_PUSHPULL);
+    }
+    else {
         return 1;
     }
 
@@ -104,8 +129,25 @@ uint16_t init_serialSCIA(serialSCIA_t *s, uint32_t baud)
         PieCtrlRegs.PIEACK.all = (PIEACK_GROUP9);
 
     }
+} else if (s == &SerialB) {
+    PieCtrlRegs.PIEIER9.bit.INTx3 = 1;
+    PieCtrlRegs.PIEIER9.bit.INTx4 = 1;
+    IER |= (M_INT9);
+    PieCtrlRegs.PIEACK.all = (PIEACK_GROUP9);
 
-    return 0;
+} else if (s == &SerialC) {
+    PieCtrlRegs.PIEIER8.bit.INTx5 = 1;
+    PieCtrlRegs.PIEIER8.bit.INTx6 = 1;
+    PieCtrlRegs.PIEACK.all = (PIEACK_GROUP8);
+    IER |= (M_INT8);
+
+} else if (s == &SerialD) {
+    PieCtrlRegs.PIEIER8.bit.INTx7 = 1;
+    PieCtrlRegs.PIEIER8.bit.INTx8 = 1;
+    PieCtrlRegs.PIEACK.all = (PIEACK_GROUP8);
+    IER |= (M_INT8);
+}
+return 0;
 }
 
 void uninit_serialSCIA(serialSCIA_t *s)
@@ -645,6 +687,166 @@ __interrupt void RXCINT_recv_ready(void)
     } else {
         RXCdata = RXCdata & 0x00FF;
         numRXC ++;
+        if (ESP8266insidecommands == 1) {
+            if (ESP8266whichcommand == 1) {
+                past4[0] = RXCdata;
+                if ((past4[0]=='\n') && (past4[1]=='\r') && (past4[2]=='K') && (past4[3]=='O')) {
+
+                    ESP8266whichcommand = 2;
+                    displayLEDletter(1);
+                    serial_send(&SerialC,"AT+CWMODE=3\r\n",strlen("AT+CWMODE=3\r\n"));
+                    past4[0] = '\0';
+                    past4[1] = '\0';
+                    past4[2] = '\0';
+                    past4[3] = '\0';
+                }
+                past4[3] = past4[2];
+                past4[2] = past4[1];
+                past4[1] = past4[0];
+            } else if (ESP8266whichcommand == 2) {
+                past4[0] = RXCdata;
+                if ((past4[0]=='\n') && (past4[1]=='\r') && (past4[2]=='K') && (past4[3]=='O')) {
+
+                    ESP8266whichcommand = 3;
+                    displayLEDletter(2);
+                    serial_send(&SerialC,"AT+CWJAP=\"COECSLNIGHT\",\"f33dback5\"\r\n",strlen("AT+CWJAP=\"COECSLNIGHT\",\"f33dback5\"\r\n"));
+                    //serial_send(&SerialC,"AT+CWJAP=\"Jesusloves\",\"n8watchit\"\r\n",strlen("AT+CWJAP=\"Jesusloves\",\"n8watchit\"\r\n"));
+                    past4[0] = '\0';
+                    past4[1] = '\0';
+                    past4[2] = '\0';
+                    past4[3] = '\0';
+                }
+                past4[3] = past4[2];
+                past4[2] = past4[1];
+                past4[1] = past4[0];
+            } else if (ESP8266whichcommand == 3) {
+                past4[0] = RXCdata;
+                if ((past4[0]=='\n') && (past4[1]=='\r') && (past4[2]=='K') && (past4[3]=='O')) {
+
+                    displayLEDletter(3);
+                    ESP8266whichcommand = 4;
+                    serial_send(&SerialC, "AT+CIPSTA=\"192.168.1.59\"\r\n", strlen("AT+CIPSTA=\"192.168.1.59\"\r\n")); //IP address to type into labview
+                    past4[0] = '\0';
+                    past4[1] = '\0';
+                    past4[2] = '\0';
+                    past4[3] = '\0';
+                }
+                past4[3] = past4[2];
+                past4[2] = past4[1];
+                past4[1] = past4[0];
+            } else if (ESP8266whichcommand == 4) {
+                past4[0] = RXCdata;
+                if ((past4[0]=='\n') && (past4[1]=='\r') && (past4[2]=='K') && (past4[3]=='O')) {
+
+                    displayLEDletter(4);
+                    ESP8266whichcommand = 5;
+                    serial_send(&SerialC,"AT+CIPMUX=1\r\n", strlen("AT+CIPMUX=1\r\n"));
+                    past4[0] = '\0';
+                    past4[1] = '\0';
+                    past4[2] = '\0';
+                    past4[3] = '\0';
+                }
+                past4[3] = past4[2];
+                past4[2] = past4[1];
+                past4[1] = past4[0];
+            } else if (ESP8266whichcommand == 5) {
+                past4[0] = RXCdata;
+                if ((past4[0]=='\n') && (past4[1]=='\r') && (past4[2]=='K') && (past4[3]=='O')) {
+
+                    ESP8266whichcommand = 6;
+                    displayLEDletter(5);
+                    serial_send(&SerialC,"AT+CIPSERVER=1,1336\r\n", strlen("AT+CIPSERVER=1,1336\r\n")); //1336 is the port to type into Labview
+                    past4[0] = '\0';
+                    past4[1] = '\0';
+                    past4[2] = '\0';
+                    past4[3] = '\0';
+                }
+                past4[3] = past4[2];
+                past4[2] = past4[1];
+                past4[1] = past4[0];
+            } else if (ESP8266whichcommand == 6) {
+                past4[0] = RXCdata;
+                if ((past4[0]=='\n') && (past4[1]=='\r') && (past4[2]=='K') && (past4[3]=='O')) {
+
+                    displayLEDletter(6);
+                    ESP8266whichcommand = 12;  // should never get in 12
+                    ESP8266insidecommands = 0;
+                    past4[0] = '\0';
+                    past4[1] = '\0';
+                    past4[2] = '\0';
+                    past4[3] = '\0';
+                }
+                past4[3] = past4[2];
+                past4[2] = past4[1];
+                past4[1] = past4[0];
+
+            } else if (ESP8266whichcommand == 12) {
+                sendback[0] = ' ';
+                sendback[1] = 'D';
+                sendback[2] = 'a';
+                sendback[3] = 'n';
+                displayLEDletter(0xF);
+                serial_send(&SerialA,sendback,4);
+            }
+
+            sendback[0] = RXCdata;
+            serial_send(&SerialA,sendback,1);
+        } else {  // ESP8266insidecommands == 0
+            // for now just echo char
+            if (sendingto8266 == 1) {
+                if (RXCdata == '>') {
+                    serial_send(&SerialC,sendto8266,sendtoSize);
+                    sendingto8266 = 0;
+                }
+            } else if (collect==0){
+                if (RXCdata == '*'){ //Reading from teraterm, looking for * symbol to start collecting into gusarray, maybe have different symbols for different notes?
+                    collect = 1;
+                    g = 0;
+                }
+            } else if (collect==1){ //If collect == 1, this is what we want to mainly edit
+                if (RXCdata =='a') {
+                    sendingto8266 = 1;
+                    sendtoSize = sprintf(sendto8266,"%.5f\r\n",turn);
+                    if (sendtoSize <= 9) {
+                        send8266CommandSize = strlen("AT+CIPSEND=0,0\r\n");  // second zero is place holder for a number 1 to 9
+                    } else {
+                        if (sendtoSize > 99) {
+                            sendtoSize = 99;
+                            sendto8266[97] = '\r';
+                            sendto8266[98] = '\n';
+                        }
+                        send8266CommandSize = strlen("AT+CIPSEND=0,00\r\n"); // second zero zero is place holder for a number 10 to 99
+                    }
+                    sprintf(send8266Command,"AT+CIPSEND=0,%d\r\n",sendtoSize);
+                    serial_send(&SerialC,send8266Command,send8266CommandSize); //AT+CIPSEND is send command on chip. 0,3: Not sure what 0 is for (id?) but the 3 corresponds to length being sent.
+
+                    collect = 0;
+                    g=0;
+                } else if (RXCdata =='\n'){ //End of array, should collect 1 or 2 floats from the * statement and turn it into myfloat variables, depending on labview
+                    gusarray[g]='\0';
+                    //sscanf(gusarray,"%f %f",&myfloat1,&myfloat2);
+                    sscanf(gusarray,"%f",&myfloat1);
+
+                    turn = myfloat1;
+                    UARTPrint = 1;
+
+                    collect = 0;
+                    g=0;
+                } else {
+                    gusarray[g]=RXCdata;
+                    g++;
+                    if (g>=50){
+                        g = 0;
+                    }
+                }
+            }
+            if (debugi < 100) {
+                debug_array[debugi] = RXCdata;
+                debugi++;
+            }
+            sendback[0] = RXCdata;
+            serial_send(&SerialA,sendback,1);
+        }
 
     }
 
@@ -669,10 +871,10 @@ __interrupt void RXDINT_recv_ready(void)
         ScidRegs.SCIFFRX.bit.RXFIFORESET = 1;
     } else {
         RXDdata = RXDdata & 0x00FF;
-	    numRXD ++;
-		
+        numRXD ++;
+
     }
-	
+
     ScidRegs.SCIFFRX.bit.RXFFINTCLR = 1;
     PieCtrlRegs.PIEACK.all = PIEACK_GROUP8;
 }

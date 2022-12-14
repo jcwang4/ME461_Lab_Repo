@@ -80,10 +80,20 @@ uint16_t WHO_AM_I           = 0x7500;
 //uint16_t YA_OFFSET_H        = 0x7A00;
 //uint16_t YA_OFFSET_L        = 0x7B00;
 
+
+// Offsets quad #1
+//uint16_t XA_OFFSET_H        = 0x13;
+//uint16_t XA_OFFSET_L        = 0x12;
+//uint16_t YA_OFFSET_H        = 0xE6;
+//uint16_t YA_OFFSET_L        = 0x18;
+
+
+// Offsets quad #2
 uint16_t XA_OFFSET_H        = 0x13;
 uint16_t XA_OFFSET_L        = 0x12;
 uint16_t YA_OFFSET_H        = 0xE6;
 uint16_t YA_OFFSET_L        = 0x18;
+
 
 uint16_t ZA_OFFSET_H        = 0x7D00;
 uint16_t ZA_OFFSET_L        = 0x7E00;
@@ -180,22 +190,22 @@ float integralPhiError_1 = 0;
 float tau_x = 0;
 float tau_y = 0;
 float tau_z = 0;
-float F_z = 0;
+float F_z = 2300;
 
 
-float Kp_y = 25;
+float Kp_y = 150;
 float Ki_y = 0;
-float Kd_y = 0.25;
-float K_dd_y = 0.0;
+float Kd_y = 6.0;
+float K_dd_y = 0.15;
 
-float Kp_x = 25;
-float Ki_x = 0;
-float Kd_x = 0.25;
-float K_dd_x = 0.0;
+float Kp_x = 150;
+float Ki_x = 0.0;
+float Kd_x = 6.0;
+float K_dd_x = 0.15;
 
-float Kp_z = 25;
+float Kp_z = 250;
 float Ki_z = 0;
-float Kd_z = 0.25;
+float Kd_z = 5.0;
 
 
 
@@ -444,7 +454,8 @@ void main(void)
     {
         if (UARTPrint == 1 ) {
             //serial_printf(&SerialA,"A0=%d A2=%d\r\n",ADC0raw,ADC2raw);  //Compiled printf minimal so only %d %x %u %c and maybe %s
-            //            serial_printf(&SerialA,"Ax=%d,Ay=%d,Az=%d,Gx=%d,Gy=%d,Gz=%d \r\n",AccelXraw,AccelYraw,AccelZraw,gyroXraw,gyroYraw,gyroZraw);
+//                        serial_printf(&SerialA,"Ax=%d,Ay=%d,Az=%d,Gx=%d,Gy=%d,Gz=%d \r\n",AccelXraw,AccelYraw,AccelZraw,gyroXraw,gyroYraw,gyroZraw);
+            serial_printf(&SerialA,"Ax=%f,Ay=%f,Az=%f\r\n",accelx,accely,accelz);
 
             //           serial_printf(&SerialA,"r : %.2f, r_dot: %.2f, p : %.2f, p_dot : %.2f, y : %.2f, y_dot : %.2f \r\n",roll_tilt, roll_tiltrate, pitch_tilt, pitch_tiltrate, yaw_tilt, yaw_tiltrate);
 //            serial_printf(&SerialA,"p : %.2f, p_dot : %.2f tau_y : %.2f, A1 : %.3f, A2 : %.3f \r\n",pitch_tilt, pitch_tiltrate, tau_y, A1, A2);
@@ -452,16 +463,7 @@ void main(void)
 //            serial_printf(&SerialA,"theta_est: %.2f phi_est: %.2f w_y: %.2f w_x: %.2f \r\n",theta_est, phi_est, w_y, w_x);
 
 
-            roll_tilt =-1* atan2( R32, R33 );
-                   pitch_tilt = -1 * -atan( R31 / sqrt(1-R31*R31) );
-                   yaw_tilt =-1 *  atan2( R21, R11 );
-
-                   //Measurements from gyroscope
-                   pitch_tiltrate = (gyroy*PI)/180.0; //z-axis: (gyroz*PI)/180.0; //y-axis: (gyroy*PI)/180.0; //x-axis: (gyrox*PI)/180.0; // rad/s
-                   roll_tiltrate = (gyrox*PI)/180.0; //z-axis: (gyroz*PI)/180.0; //y-axis: (gyroy*PI)/180.0; //x-axis: (gyrox*PI)/180.0; // rad/s
-                   yaw_tiltrate = (gyroz*PI)/180.0; //z-axis: (gyroz*PI)/180.0; //y-axis: (gyroy*PI)/180.0; //x-axis: (gyrox*PI)/180.0; // rad/s
-
-            serial_printf(&SerialA,"r: %.2f rr: %.2f p: %.2f pr: %.2f y: %.2f yr: %.2f \r\n", roll_tilt,roll_tiltrate, pitch_tilt, pitch_tiltrate, yaw_tilt, yaw_tiltrate );
+//             serial_printf(&SerialA,"r: %.2f rr: %.2f p: %.2f pr: %.2f y: %.2f yr: %.2f \r\n", roll_tilt,roll_tiltrate, pitch_tilt, pitch_tiltrate, yaw_tilt, yaw_tiltrate );
 
             UARTPrint = 0;
         }
@@ -486,11 +488,11 @@ __interrupt void SWI_isr(void) {
     gyroz  = gyroZraw*250.0/32767.0;
 
 
-//    mx = mx - mx_offset;   //Add in the offset from calibration
-//    my = my - my_offset;   //Add in the offset from calibration
-//    mz = mz - mz_offset; //Add in the offset from calibration
+    mx = mx - mx_offset;   //Add in the offset from calibration
+    my = my - my_offset;   //Add in the offset from calibration
+    mz = mz - mz_offset; //Add in the offset from calibration
 
-    //Use arctan to get compass angle if quadrotor flat
+//    Use arctan to get compass angle if quadrotor flat
 //    if(my < 0) {
 //        compass_angle = 270.0-(((float)atan((mx/my)))*180.0/PI);
 //    }
@@ -503,6 +505,20 @@ __interrupt void SWI_isr(void) {
 //    if((my == 0) && (mx > 0)) {
 //        compass_angle = 0.0;
 //    }
+
+//    Use arctan to get compass angle if quadrotor flat
+       if(my < 0) {
+           compass_angle = 4.7124-(float)atan(mx/my);
+       }
+       else if(my > 0) {
+           compass_angle = 1.571-(float)atan(mx/my);
+       }
+       else if((my == 0) && (mx < 0)) {
+           compass_angle = PI;
+       }
+       if((my == 0) && (mx > 0)) {
+           compass_angle = 0.0;
+       }
     SPIenc_state = 99;  // no state
 
     if(calibration_state == 0){
@@ -573,7 +589,7 @@ __interrupt void SWI_isr(void) {
         //            Added - signs to angles
         roll_tilt =-1* atan2( R32, R33 );
         pitch_tilt = -1 * -atan( R31 / sqrt(1-R31*R31) );
-        yaw_tilt =-1 *  atan2( R21, R11 );
+//        yaw_tilt =-1 *  atan2( R21, R11 );
 
         //Measurements from gyroscope
         pitch_tiltrate = (gyroy*PI)/180.0; //z-axis: (gyroz*PI)/180.0; //y-axis: (gyroy*PI)/180.0; //x-axis: (gyrox*PI)/180.0; // rad/s
@@ -612,18 +628,18 @@ __interrupt void SWI_isr(void) {
 //
 //        w_y = -pitch_tiltrate;
 //        w_x = - roll_tiltrate;
-//        w_z = yaw_tiltrate;
+        w_z = yaw_tiltrate;
 //
 ////        thetaError = -pitch_tilt;
 //
 //        theta_k = theta_k_1 + w_y * T_s;
 //        phi_k = phi_k_1 + w_x * T_s;
-//        psi_k = psi_k_1 + w_z * T_s;
+        psi_k = psi_k_1 + w_z * T_s;
 //
 ////        When accelx = 1, theta = 1.57 (pi/2)
 ////        theta_est = 0.9*(0.9*theta_k + 0.1* theta_k_1)+ 0.157 * accelx;
 ////        phi_est = 0.9*(0.9*phi_k + 0.1* phi_k_1)+ 0.157 * accely;
-////        psi_est = 0.9*(0.9*psi_k + 0.1* psi_k_1);
+        psi_est = 0.9*(0.9*psi_k + 0.1* psi_k_1) + compass_angle*0.1;
 //
 //        theta_est = 0.999 * theta_k + .001 * accelx;
 
@@ -645,10 +661,10 @@ __interrupt void SWI_isr(void) {
 
         integralPhiError = integralPhiError_1 + (phi_est + phi_est_1) / 2;
 
-        tau_x = -Kp_x * (phi_est) -Kd_x * (w_x) - K_dd_x - Ki_x * integralPhiError;
+        tau_x = -Kp_x * (phi_est) -Kd_x * (w_x) - K_dd_x * w_x_dot - Ki_x * integralPhiError;
         tau_y = -Kp_y * (theta_est) -Kd_y * (w_y) - K_dd_y * w_y_dot - Ki_y * integralThetaError;
-//        tau_z = -Kp_z * (psi_est) -Kd_z * (w_z);
-        F_z = 1500;
+        tau_z = -Kp_z * (psi_est) -Kd_z * (w_z);
+
 
         A1 = tau_y*65  + tau_z *20 + F_z;
         A2 = -tau_y*65 + F_z + tau_z *20;
@@ -726,8 +742,8 @@ __interrupt void SWI_isr(void) {
         w_x_dot_1 = w_x_dot;
         w_x_1 = w_x;
 
-//        integralPhiError_1 = integralPhiError;
-//        integralThetaError_1 = integralThetaError;
+        integralPhiError_1 = integralPhiError;
+        integralThetaError_1 = integralThetaError;
 
 //        EPwm1Regs.CMPA.half.CMPA = A1;
 //        EPwm1Regs.CMPB = B1;
@@ -1087,37 +1103,71 @@ void setupSpia(void)        //for mpu9250
 
     DELAY_US(10);
 
+//    QUAD #1 accelerometer offsets
+//    GpioDataRegs.GPACLEAR.bit.GPIO19 = 1;
+//    SpiaRegs.SPITXBUF = (XA_OFFSET_H | 0x13); // 0x7700
+//    while(SpiaRegs.SPIFFRX.bit.RXFFST !=1);
+//    GpioDataRegs.GPASET.bit.GPIO19 = 1;
+//    temp = SpiaRegs.SPIRXBUF;
+//
+//    DELAY_US(10);
+//
+//    GpioDataRegs.GPACLEAR.bit.GPIO19 = 1;
+//    SpiaRegs.SPITXBUF = (XA_OFFSET_L | 0x22); // 0x7800
+//    while(SpiaRegs.SPIFFRX.bit.RXFFST !=1);
+//    GpioDataRegs.GPASET.bit.GPIO19 = 1;
+//    temp = SpiaRegs.SPIRXBUF;
+//
+//    DELAY_US(10);
+//
+//    GpioDataRegs.GPACLEAR.bit.GPIO19 = 1;
+//    SpiaRegs.SPITXBUF = (YA_OFFSET_H | 0xE6); // 0x7A00
+//    while(SpiaRegs.SPIFFRX.bit.RXFFST !=1);
+//    GpioDataRegs.GPASET.bit.GPIO19 = 1;
+//    temp = SpiaRegs.SPIRXBUF;
+//
+//    DELAY_US(10);
+//
+//    GpioDataRegs.GPACLEAR.bit.GPIO19 = 1;
+//    SpiaRegs.SPITXBUF = (YA_OFFSET_L | 0x18); // 0x7B00
+//    while(SpiaRegs.SPIFFRX.bit.RXFFST !=1);
+//    GpioDataRegs.GPASET.bit.GPIO19 = 1;
+//    temp = SpiaRegs.SPIRXBUF;
+//
+//    DELAY_US(10);
+
+//    QUAD #2 accelerometer offsets
     GpioDataRegs.GPACLEAR.bit.GPIO19 = 1;
-    SpiaRegs.SPITXBUF = (XA_OFFSET_H | 0x13); // 0x7700
-    while(SpiaRegs.SPIFFRX.bit.RXFFST !=1);
-    GpioDataRegs.GPASET.bit.GPIO19 = 1;
-    temp = SpiaRegs.SPIRXBUF;
+        SpiaRegs.SPITXBUF = (XA_OFFSET_H | 0x13); // 0x7700
+        while(SpiaRegs.SPIFFRX.bit.RXFFST !=1);
+        GpioDataRegs.GPASET.bit.GPIO19 = 1;
+        temp = SpiaRegs.SPIRXBUF;
 
-    DELAY_US(10);
+        DELAY_US(10);
 
-    GpioDataRegs.GPACLEAR.bit.GPIO19 = 1;
-    SpiaRegs.SPITXBUF = (XA_OFFSET_L | 0x22); // 0x7800
-    while(SpiaRegs.SPIFFRX.bit.RXFFST !=1);
-    GpioDataRegs.GPASET.bit.GPIO19 = 1;
-    temp = SpiaRegs.SPIRXBUF;
+        GpioDataRegs.GPACLEAR.bit.GPIO19 = 1;
+        SpiaRegs.SPITXBUF = (XA_OFFSET_L | 0x22); // 0x7800
+        while(SpiaRegs.SPIFFRX.bit.RXFFST !=1);
+        GpioDataRegs.GPASET.bit.GPIO19 = 1;
+        temp = SpiaRegs.SPIRXBUF;
 
-    DELAY_US(10);
+        DELAY_US(10);
 
-    GpioDataRegs.GPACLEAR.bit.GPIO19 = 1;
-    SpiaRegs.SPITXBUF = (YA_OFFSET_H | 0xE6); // 0x7A00
-    while(SpiaRegs.SPIFFRX.bit.RXFFST !=1);
-    GpioDataRegs.GPASET.bit.GPIO19 = 1;
-    temp = SpiaRegs.SPIRXBUF;
+        GpioDataRegs.GPACLEAR.bit.GPIO19 = 1;
+        SpiaRegs.SPITXBUF = (YA_OFFSET_H | 0xB1); // 0x7A00
+        while(SpiaRegs.SPIFFRX.bit.RXFFST !=1);
+        GpioDataRegs.GPASET.bit.GPIO19 = 1;
+        temp = SpiaRegs.SPIRXBUF;
 
-    DELAY_US(10);
+        DELAY_US(10);
 
-    GpioDataRegs.GPACLEAR.bit.GPIO19 = 1;
-    SpiaRegs.SPITXBUF = (YA_OFFSET_L | 0x18); // 0x7B00
-    while(SpiaRegs.SPIFFRX.bit.RXFFST !=1);
-    GpioDataRegs.GPASET.bit.GPIO19 = 1;
-    temp = SpiaRegs.SPIRXBUF;
+        GpioDataRegs.GPACLEAR.bit.GPIO19 = 1;
+        SpiaRegs.SPITXBUF = (YA_OFFSET_L | 0xE0); // 0x7B00
+        while(SpiaRegs.SPIFFRX.bit.RXFFST !=1);
+        GpioDataRegs.GPASET.bit.GPIO19 = 1;
+        temp = SpiaRegs.SPIRXBUF;
 
-    DELAY_US(10);
+        DELAY_US(10);
 
     GpioDataRegs.GPACLEAR.bit.GPIO19 = 1;
     SpiaRegs.SPITXBUF = (ZA_OFFSET_H | 0x0021); // 0x7D00
