@@ -20,6 +20,8 @@
 
 extern float roll_tiltrate;
 extern float pitch_tiltrate;
+float pitchsetpoint = 0;
+float yawsetpoint = 0;
 
 serial_t SerialA;
 
@@ -196,7 +198,6 @@ int32_t inRXA = 0;
 __interrupt void RXAINT_recv_ready(void)
 {
     RXAdata = SciaRegs.SCIRXBUF.all;
-    inRXA++;
     /* SCI PE or FE error */
     if (RXAdata & 0xC000) {
         SciaRegs.SCICTL1.bit.SWRESET = 0;
@@ -204,7 +205,6 @@ __interrupt void RXAINT_recv_ready(void)
         SciaRegs.SCIFFRX.bit.RXFIFORESET = 0;
         SciaRegs.SCIFFRX.bit.RXFIFORESET = 1;
     } else {
-        numRXA++;
         RXAdata = RXAdata & 0x00FF;
 
         if (com_state == 0) { //wait for data from pi
@@ -231,8 +231,8 @@ __interrupt void RXAINT_recv_ready(void)
             if (received_count == 16){
                 com_state = 0;
                 received_count = 0;
-                pinkx = received_pi[0].value;
-                pinky = received_pi[1].value;
+                pitchsetpoint = received_pi[0].value;
+                yawsetpoint = received_pi[1].value;
                 bluex = received_pi[2].value;
                 bluey = received_pi[3].value;
             }
@@ -260,7 +260,7 @@ __interrupt void RXAINT_recv_ready(void)
 
     }
 
-
+    numRXA++;
     SciaRegs.SCIFFRX.bit.RXFFINTCLR = 1;
     PieCtrlRegs.PIEACK.all = PIEACK_GROUP9;
 }
