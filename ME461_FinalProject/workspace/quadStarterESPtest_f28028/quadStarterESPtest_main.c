@@ -279,6 +279,21 @@ void main(void)
     //
     DINT;
 
+    EALLOW;
+    GpioCtrlRegs.GPAPUD.bit.GPIO5 = 1;    // Disable pull-up on GPIO5 (EPWM3B)
+    GpioCtrlRegs.GPAMUX1.bit.GPIO5 = 0;   // Configure GPIO5
+    GpioCtrlRegs.GPADIR.bit.GPIO5 = 1;
+    //ESP8266 Reset
+    GpioDataRegs.GPASET.bit.GPIO5 = 1;
+    DELAY_US(100000);
+    // RESET ESP8266
+    GpioDataRegs.GPACLEAR.bit.GPIO5 = 1;
+    DELAY_US(500000);
+    GpioDataRegs.GPASET.bit.GPIO5 = 1;
+    DELAY_US(3000000);
+    EDIS;
+
+
     //
     // Initialize the PIE control registers to their default state.
     // The default state is all PIE interrupts disabled and flags
@@ -292,6 +307,7 @@ void main(void)
     //
     IER = 0x0000;
     IFR = 0x0000;
+
 
     //
     // Initialize the PIE vector table with pointers to the shell Interrupt
@@ -445,20 +461,6 @@ void main(void)
     GpioDataRegs.GPBCLEAR.bit.GPIO34 = 1;
     GpioCtrlRegs.GPBDIR.bit.GPIO34 = 1;
     GpioCtrlRegs.GPBPUD.bit.GPIO34 = 1;
-
-    GpioCtrlRegs.GPAPUD.bit.GPIO5 = 1;    // Disable pull-up on GPIO5 (EPWM3B)
-    GpioCtrlRegs.GPAMUX1.bit.GPIO5 = 0;   // Configure GPIO5
-    GpioCtrlRegs.GPADIR.bit.GPIO5 = 1;
-    //ESP8266 Reset
-    GpioDataRegs.GPASET.bit.GPIO5 = 1;
-    DELAY_US(100000);
-    // RESET ESP8266
-    GpioDataRegs.GPACLEAR.bit.GPIO5 = 1;
-    DELAY_US(500000);
-    GpioDataRegs.GPASET.bit.GPIO5 = 1;
-    DELAY_US(3000000);
-
-
     EDIS;
 
     SpiaRegs.SPIFFRX.bit.RXFFOVFCLR=1;  // Clear Overflow flag

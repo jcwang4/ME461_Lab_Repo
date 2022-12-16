@@ -34,12 +34,20 @@ int16_t send8266CommandSize = 0;
 int16_t sendingto8266 = 0;
 int16_t sendtoSize = 0;
 
+
+float value1 = 0;
+float value2 = 0;
+float value3 = 0;
+float value4 = 0;
+float value5 = 0;
+float value6 = 0;
+
 float myfloat1=0;
 
 int16_t collect = 0;
-char gusarray[150];
+char gusarray[300];
 int16_t g = 0;
-char debug_array[100];
+char debug_array[200];
 int16_t debugi = 0;
 char sendback[10];
 char past4[4] = {'\0','\0','\0','\0'};
@@ -209,14 +217,14 @@ __interrupt void TXAINT_data_sent(void)
 //
 //
 
-
+int32_t daninISR = 0;
 #ifdef _FLASH
 #pragma CODE_SECTION(RXAINT_recv_ready, "ramfuncs");
 #endif
 __interrupt void RXAINT_recv_ready(void)
 {
     RXAdata = SciaRegs.SCIRXBUF.all;
-
+    daninISR++;
     /* SCI PE or FE error */
     if (RXAdata & 0xC000) {
         SciaRegs.SCICTL1.bit.SWRESET = 0;
@@ -225,6 +233,12 @@ __interrupt void RXAINT_recv_ready(void)
         SciaRegs.SCIFFRX.bit.RXFIFORESET = 1;
     } else {
         RXAdata = RXAdata & 0x00FF;
+        //if (debugi < 100) {
+            debug_array[debugi%200] = RXAdata;
+            debugi++;
+        //}
+
+
         if (ESP8266insidecommands == 1) {
             if (ESP8266whichcommand == 1) {
                 past4[0] = RXAdata;
@@ -260,7 +274,7 @@ __interrupt void RXAINT_recv_ready(void)
                 if ((past4[0]=='\n') && (past4[1]=='\r') && (past4[2]=='K') && (past4[3]=='O')) {
 
                     ESP8266whichcommand = 4;
-                    serial_send(&SerialA, "AT+CIPSTA=\"192.168.1.58\"\r\n", strlen("AT+CIPSTA=\"192.168.1.58\"\r\n")); //IP address to type into labview
+                    serial_send(&SerialA, "AT+CIPSTA=\"192.168.1.56\"\r\n", strlen("AT+CIPSTA=\"192.168.1.56\"\r\n")); //IP address to type into labview
                     past4[0] = '\0';
                     past4[1] = '\0';
                     past4[2] = '\0';
@@ -355,8 +369,8 @@ __interrupt void RXAINT_recv_ready(void)
                     g=0;
                 } else if (RXAdata =='\n'){ //End of array, should collect 1 or 2 floats from the * statement and turn it into myfloat variables, depending on labview
                     gusarray[g]='\0';
-                    //sscanf(gusarray,"%f %f",&myfloat1,&myfloat2);
-                    sscanf(gusarray,"%f",&myfloat1);
+                    sscanf(gusarray,"%f,%f,%f,%f,%f,%f",&value1,&value2,&value3,&value4,&value5,&value6);
+                    //sscanf(gusarray,"%f",&myfloat1);
 
                     Kp_y = myfloat1;
                     UARTPrint = 1;
@@ -371,12 +385,12 @@ __interrupt void RXAINT_recv_ready(void)
                     }
                 }
             }
-        if (debugi < 100) {
-            debug_array[debugi] = RXAdata;
-            debugi++;
-        }
-        sendback[0] = RXAdata;
-        //serial_send(&SerialA,sendback,1);
+//            if (debugi < 100) {
+//                debug_array[debugi] = RXAdata;
+//                debugi++;
+//            }
+            sendback[0] = RXAdata;
+            //serial_send(&SerialA,sendback,1);
         }
         numRXA++;
         //        RXAdata = RXAdata & 0x00FF;
