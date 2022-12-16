@@ -192,7 +192,6 @@ float tau_y = 0;
 float tau_z = 0;
 float F_z = 2300;
 
-
 float Kp_y = 150;
 float Ki_y = 0;
 float Kd_y = 6.0;
@@ -203,11 +202,9 @@ float Ki_x = 0.0;
 float Kd_x = 6.0;
 float K_dd_x = 0.15;
 
-float Kp_z = 250;
+float Kp_z = 75;
 float Ki_z = 0;
 float Kd_z = 5.0;
-
-
 
 //float thetaError = 0;
 //float thetaError_1 = 0;
@@ -237,6 +234,22 @@ float w_x_dot = 0;
 float w_x_dot_1 = 0;
 float w_x_1 = 0;
 
+float yawDif = 0;
+float pitchDif = 0;
+
+extern float pitchsetpoint;
+extern float yawsetpoint;
+
+//these are imported from MATLAB, LENGTH was changed for every iteration of the code, again used a different array name but not sure if this was necessary
+float yk = 0;
+#define LENGTH 5
+float x[LENGTH]={0};
+float m[LENGTH]={0};
+float b[5]={    3.3833240118424500e-02, 2.4012702387971543e-01, 4.5207947200372001e-01, 2.4012702387971543e-01, 3.3833240118424500e-02}; // Matlab FIR low pass filter
+float c[22]={   -2.3890045153263611e-03,    -3.3150057635348224e-03,    -4.6136191242627002e-03,    -4.1659855521681268e-03,    1.4477422497795286e-03, 1.5489414225159667e-02, 3.9247886844071371e-02, 7.0723964095458614e-02, 1.0453473887246176e-01, 1.3325672639406205e-01, 1.4978314227429904e-01, 1.4978314227429904e-01, 1.3325672639406205e-01, 1.0453473887246176e-01, 7.0723964095458614e-02, 3.9247886844071371e-02, 1.5489414225159667e-02, 1.4477422497795286e-03, -4.1659855521681268e-03,    -4.6136191242627002e-03,    -3.3150057635348224e-03,    -2.3890045153263611e-03};
+float r[32]={   -1.6466950312719205e-03,    -1.9674478273332152e-03,    -2.5003674400324240e-03,    -2.9684278771570597e-03,    -2.8446917171801697e-03,    -1.4277801151067985e-03,    2.0225586357400412e-03, 8.1147975336387096e-03, 1.7155263118799242e-02, 2.9016348842214112e-02, 4.3076083572491840e-02, 5.8248706435185670e-02, 7.3107780287600024e-02, 8.6084070804293089e-02, 9.5704111083060386e-02, 1.0082568969505851e-01, 1.0082568969505851e-01, 9.5704111083060386e-02, 8.6084070804293089e-02, 7.3107780287600024e-02, 5.8248706435185670e-02, 4.3076083572491840e-02, 2.9016348842214112e-02, 1.7155263118799242e-02, 8.1147975336387096e-03, 2.0225586357400412e-03, -1.4277801151067985e-03,    -2.8446917171801697e-03,    -2.9684278771570597e-03,    -2.5003674400324240e-03,    -1.9674478273332152e-03,    -1.6466950312719205e-03};
+float t[49]={   3.8168083579915922e-03, -3.4589333708678368e-03,    -6.9147551447963727e-03,    -1.3631840702259425e-04,    1.0188680261934764e-02, 7.6317848865174150e-03, -1.0000510607010774e-02,    -1.8517416378068072e-02,    1.4850797269400468e-03, 2.7051273313302662e-02, 1.6406730861711030e-02, -2.4772459719301049e-02,    -3.7527313932122899e-02,    6.5024645833607099e-03, 5.0126312962860256e-02, 2.4285061681454740e-02, -4.3316187535560775e-02,    -5.5017696936151023e-02,    1.4590312162091180e-02, 6.9780627184860167e-02, 2.6733509259813232e-02, -5.8307031134456164e-02,    -6.3049508354328390e-02,    2.2686450611081498e-02, 7.7463632124324944e-02, 2.2686450611081498e-02, -6.3049508354328390e-02,    -5.8307031134456164e-02,    2.6733509259813232e-02, 6.9780627184860167e-02, 1.4590312162091180e-02, -5.5017696936151023e-02,    -4.3316187535560775e-02,    2.4285061681454740e-02, 5.0126312962860256e-02, 6.5024645833607099e-03, -3.7527313932122899e-02,    -2.4772459719301049e-02,    1.6406730861711030e-02, 2.7051273313302662e-02, 1.4850797269400468e-03, -1.8517416378068072e-02,    -1.0000510607010774e-02,    7.6317848865174150e-03, 1.0188680261934764e-02, -1.3631840702259425e-04,    -6.9147551447963727e-03,    -3.4589333708678368e-03,    3.8168083579915922e-03};
+//using MATLAB, we can define different cutoff frequencies and band frequencies. For the 31st order filter, it'll only pass values around 2000 Hz
 
 //
 // Main
@@ -455,7 +468,7 @@ void main(void)
         if (UARTPrint == 1 ) {
             //serial_printf(&SerialA,"A0=%d A2=%d\r\n",ADC0raw,ADC2raw);  //Compiled printf minimal so only %d %x %u %c and maybe %s
 //                        serial_printf(&SerialA,"Ax=%d,Ay=%d,Az=%d,Gx=%d,Gy=%d,Gz=%d \r\n",AccelXraw,AccelYraw,AccelZraw,gyroXraw,gyroYraw,gyroZraw);
-            serial_printf(&SerialA,"Ax=%f,Ay=%f,Az=%f\r\n",accelx,accely,accelz);
+           // serial_printf(&SerialA,"Ax=%f,Ay=%f,Az=%f\r\n",accelx,accely,accelz);
 
             //           serial_printf(&SerialA,"r : %.2f, r_dot: %.2f, p : %.2f, p_dot : %.2f, y : %.2f, y_dot : %.2f \r\n",roll_tilt, roll_tiltrate, pitch_tilt, pitch_tiltrate, yaw_tilt, yaw_tiltrate);
 //            serial_printf(&SerialA,"p : %.2f, p_dot : %.2f tau_y : %.2f, A1 : %.3f, A2 : %.3f \r\n",pitch_tilt, pitch_tiltrate, tau_y, A1, A2);
@@ -486,7 +499,6 @@ __interrupt void SWI_isr(void) {
     gyrox  = gyroXraw*250.0/32767.0;
     gyroy  = gyroYraw*250.0/32767.0;
     gyroz  = gyroZraw*250.0/32767.0;
-
 
     mx = mx - mx_offset;   //Add in the offset from calibration
     my = my - my_offset;   //Add in the offset from calibration
@@ -519,6 +531,9 @@ __interrupt void SWI_isr(void) {
        if((my == 0) && (mx > 0)) {
            compass_angle = 0.0;
        }
+
+     compass_angle = 0;
+
     SPIenc_state = 99;  // no state
 
     if(calibration_state == 0){
@@ -621,11 +636,6 @@ __interrupt void SWI_isr(void) {
 ////            length rotor to CoM (m)
 //            l = 0.0916
 
-
-
-
-
-//
 //        w_y = -pitch_tiltrate;
 //        w_x = - roll_tiltrate;
         w_z = yaw_tiltrate;
@@ -657,13 +667,59 @@ __interrupt void SWI_isr(void) {
 //            integralPhiError = integralPhiError_1 + (phi_est + phi_est_1) / 2;
 //        }
 
-
-
         integralPhiError = integralPhiError_1 + (phi_est + phi_est_1) / 2;
 
+//        rollsetpoint = atan((abs(pinky-bluey))/(abs(pinkx-bluex)));
+
+//        rollDif = phi_est - rollsetpoint;
+        if(pitchsetpoint > 1.05)
+        {
+            pitchsetpoint = 1.05;
+        }
+        if(pitchsetpoint < -1.05)
+        {
+            pitchsetpoint = -1.05;
+        }
+
+        if(yawsetpoint > 1.05)
+        {
+            yawsetpoint = 1.05;
+        }
+        if(yawsetpoint < -1.05)
+        {
+            yawsetpoint = -1.05;
+        }
+//        if(fabs(yawsetpoint)>fabs(pitchsetpoint))
+//        {
+//            pitchsetpoint = 0;
+//        }
+//        if(fabs(yawsetpoint)<fabs(pitchsetpoint))
+//        {
+//            yawsetpoint = 0;
+//        }
+//
+//        x[0] = pitchsetpoint; //initialize the array at the first ADC value
+//        yk = 0;
+//        int16_t j = 0; //initialize the starting point of the array
+//
+//        for(j = 0; j < LENGTH; j++) //for loop that will make an array of LENGTH, which is defined above
+//        {
+//
+//            yk += b[j]*x[j]; //this mimics the commented out function below, where instead of individually multiplying it will
+//            // multiply and add together to make the function
+//        }
+//
+//        for(j=LENGTH-1; j > 0 ; j --)// then this function increments downwards
+//        {
+//            x[j] = x[j-1]; //this make it so that previous states are saved
+//        }
+
+        pitchDif = theta_est - pitchsetpoint;
+        yawDif = psi_est - yawsetpoint;
+
         tau_x = -Kp_x * (phi_est) -Kd_x * (w_x) - K_dd_x * w_x_dot - Ki_x * integralPhiError;
-        tau_y = -Kp_y * (theta_est) -Kd_y * (w_y) - K_dd_y * w_y_dot - Ki_y * integralThetaError;
-        tau_z = -Kp_z * (psi_est) -Kd_z * (w_z);
+        tau_y = -Kp_y * (pitchDif) -Kd_y * (w_y) - K_dd_y * w_y_dot - Ki_y * integralThetaError;
+        tau_z = -Kp_z * (yawDif) -Kd_z * (w_z);
 
 
         A1 = tau_y*65  + tau_z *20 + F_z;
@@ -683,26 +739,26 @@ __interrupt void SWI_isr(void) {
         if(A1 > 3000){
             A1 = 3000;
         }
-        else if(A1 <0){
-            A1 = 0;
+        else if(A1 <75){
+            A1 = 75;
         }
         if(B1 > 3000){
             B1 = 3000;
         }
-        else if(B1 <0){
-            B1 = 0;
+        else if(B1 <75){
+            B1 = 75;
         }
         if(A2 > 3000){
             A2 = 3000;
         }
-        else if(A2 <0){
-            A2 = 0;
+        else if(A2 <75){
+            A2 = 75;
         }
         if(A2 > 3000){
             A2 = 3000;
         }
-        if(B2 <0){
-            B2 = 0;
+        if(B2 <75){
+            B2 = 75;
         }
         else if(B2 > 3000){
             B2 = 3000;
